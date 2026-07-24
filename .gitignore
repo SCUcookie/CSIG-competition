@@ -1,0 +1,15 @@
+*.egg-info/
+.venv/
+.external/
+data/
+datasets/
+*.tar
+*.zip
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+logs/
+work_dirs/
+__pycache__/
+.pytest_cache/

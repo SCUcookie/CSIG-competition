@@ -1,0 +1,15 @@
+{
+  "collected_at": "2026-07-23",
+  "os": {"platform": "Linux 5.15.0-124-generic x86_64", "python": "3.9.20"},
+  "python": {"version": "3.9.20", "pip": "24.3.1"},
+  "cpu": {"logical_cores": 112, "physical_cores": 56, "model": "Intel(R) Xeon(R) Platinum 8280 CPU @ 2.70GHz"},
+  "memory": {"total": "251Gi", "available": "206Gi", "swap_total": "15Gi"},
+  "gpus": [{"count": 8, "model": "NVIDIA GeForce RTX 4090", "memory_mib": 24564}],
+  "nvidia_driver": "535.183.01",
+  "cuda": null,
+  "torch": null,
+  "storage": {"repo_free": "804G", "data2_free": "1.6T", "filesystem": "ext4/device details not independently verified"},
+  "network_checks": {"official_sites": "not performed in this offline preparation pass"},
+  "data_inventory": {"tar": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val.tar", "tar_bytes": 26290307072, "extracted_root": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val", "extracted_size": "25G", "train_sequence_dirs": 1178, "val_sequence_dirs": 255, "val_extra_files_at_root": ["geo_val_added.txt"], "train_files": 199600, "val_files": 46175, "note": "directory count plus the validation root metadata file is not silently equated to the official split count"},
+  "measurement_notes": ["nvidia-smi reported eight RTX 4090 devices; CUDA/PyTorch state was not imported.", "CPU and memory values were collected with lscpu/free.", "804G free on the repository filesystem passes the 250G download gate."]
+}

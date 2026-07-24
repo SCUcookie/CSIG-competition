@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "jinsight-track1"
+version = "0.1.0"
+description = "CPU baseline and submission tooling for CSIG track one"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.23", "Pillow>=9.0", "scipy>=1.8"]
+[project.scripts]
+jinsight-track1 = "jinsight_track1.cli:main"
+[tool.setuptools.packages.find]
+where = ["src"]
+[tool.pytest.ini_options]
+pythonpath = ["src"]
