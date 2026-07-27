@@ -1,0 +1,28 @@
+{
+  "training_config": "work_dirs/yolov8n_seg/train_config.json",
+  "data_paths": {
+    "train": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/train",
+    "val": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/val"
+  },
+  "sequences": {
+    "train": 1433,
+    "val": 255
+  },
+  "weights": "work_dirs/yolov8n_seg/ultralytics/weights/best.pt",
+  "weights_sha256": "f923c668478f1d478034d6f32bc8b2c54fafdddb3a5daa11c98facb7ca69ee19",
+  "epochs_completed": 50,
+  "nan_inf_found": false,
+  "ultralytics_val_metrics": {
+    "mask_map50": 0.8207
+  },
+  "local_proxy_metrics": {
+    "status": "Evaluation timed out/stuck, process killed. Manual intervention might be needed. (Proxy metrics unavailable)"
+  },
+  "txt_zip_validation": {
+    "txt_count": 255,
+    "zip_valid": true,
+    "coordinate_order_checked": "xy",
+    "subdirectories_present": false
+  },
+  "test_set_status": "Test set not yet open, no test labels used, not uploaded to Codabench."
+}
