@@ -1,5 +1,13 @@
 # 训练完成后 Agent 执行 Prompt
 
+> 2026-07-27 线上故障更新：首次提交得到 Final Score 0.81、F1 0.0081，
+> Track Accuracy/Completeness 均为 0。已确认旧版导出在
+> `result.masks.data` 推理画布上直接计算质心，存在未恢复原图尺度的问题。
+> 在执行本文旧步骤前，必须先完整执行
+> `docs/score_recovery_and_next_training_plan.md` 的“服务器恢复执行顺序”。
+> 坐标修复版在线复测完成前禁止重新训练；现有 `best.pt` 必须先作为恢复基线。
+> Track 两项为 0 是检测模式 `ID=0` 的预期结果，不是当前主故障。
+
 你现在接手的是 CSIG Track 1 YOLOv8-seg 首轮训练后的收尾任务。请在当前项目目录继续工作，不要重新训练，除非权重不存在或已损坏。
 
 ## 目标

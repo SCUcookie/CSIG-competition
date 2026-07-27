@@ -13,3 +13,19 @@ logs/
 work_dirs/
 __pycache__/
 .pytest_cache/
+
+# Local transfer credentials and portable tooling must never enter GitHub.
+pwd.md
+putty-portable/
+rsync-portable/
+*.nupkg
+sftp-upload.pid
+sftp-upload.stderr.log
+sftp-upload.stdout.log
+sftp_probe.txt
+sftp_resume.txt
+upload-monitor.log
+upload-status.json
+upload-supervisor.pid
+upload-supervisor.stderr.log
+upload-supervisor.stdout.log

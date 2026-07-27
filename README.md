@@ -31,22 +31,32 @@ python -m jinsight_track1.cli yolo-train \
   --val-root /data2/2025/ldh/SatVideoIRSDT_v1_train_val/val \
   --weights work_dirs/yolov8n_seg/yolov8n-seg.pt --download-weights
 python -m jinsight_track1.cli yolo-eval work_dirs/yolov8n_seg/ultralytics/weights/best.pt \
-  /data2/2025/ldh/SatVideoIRSDT_v1_train_val/val work_dirs/yolov8n_seg
+  /data2/2025/ldh/SatVideoIRSDT_v1_train_val/val work_dirs/yolov8n_seg/score_recovery \
+  --imgsz 640 --batch 16 \
+  --conf-grid 0.01,0.03,0.05,0.10,0.15,0.20,0.25,0.35,0.50,0.70
 ```
 
 When the official test directory is released, pass it explicitly to `yolo-infer`:
 
 ```bash
-python -m jinsight_track1.cli yolo-infer MODEL.pt /path/to/test work_dirs/yolov8n_seg/test_predictions
+python -m jinsight_track1.cli yolo-infer MODEL.pt /path/to/test \
+  work_dirs/yolov8n_seg/test_predictions_coordfix_v2 \
+  --imgsz 640 --batch 16 --conf BEST_CONFIDENCE --coordinate-order xy
 ```
 
 The generated ZIP is validated for direct-root TXT entries, five-digit frame
 numbers, counts, and coordinate order (`--coordinate-order xy|yx`, default `xy`).
 Validation metrics are local point-matching proxies and are not official scores.
+YOLO segmentation centroids are calculated from `Masks.xy` in original-image
+pixels; the raw `Masks.data` inference canvas must never be serialized as image
+coordinates. The confirmed score-recovery runbook and training gates are in
+`docs/score_recovery_and_next_training_plan.md`.
 
 On this managed host, launch GPU commands through `scripts/gpu_session.sh` so
 the NVIDIA character devices are recreated in the same session:
 
 ```bash
-bash scripts/gpu_session.sh python -m jinsight_track1.cli yolo-infer MODEL.pt /path/to/test work_dirs/yolov8n_seg/test_predictions
+bash scripts/gpu_session.sh python -m jinsight_track1.cli yolo-infer MODEL.pt \
+  /path/to/test work_dirs/yolov8n_seg/test_predictions_coordfix_v2 \
+  --imgsz 640 --batch 16 --conf BEST_CONFIDENCE --coordinate-order xy
 ```

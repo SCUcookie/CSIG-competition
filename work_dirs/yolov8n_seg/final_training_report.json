@@ -18,11 +18,20 @@
   "local_proxy_metrics": {
     "status": "Evaluation timed out/stuck, process killed. Manual intervention might be needed. (Proxy metrics unavailable)"
   },
+  "online_submission_incident": {
+    "final_score": 0.81,
+    "f1_score": 0.0081,
+    "track_accuracy": 0,
+    "track_completeness": 0,
+    "root_cause": "Legacy export calculated centroids on result.masks.data without restoring original-image coordinates.",
+    "status": "Coordinate fix implemented; existing submission ZIP is invalid and must not be reused."
+  },
   "txt_zip_validation": {
     "txt_count": 255,
     "zip_valid": true,
     "coordinate_order_checked": "xy",
+    "original_image_coordinate_scale_checked": false,
     "subdirectories_present": false
   },
-  "test_set_status": "Test set not yet open, no test labels used, not uploaded to Codabench."
+  "test_set_status": "An online detection submission was evaluated after this initial report; see online_submission_incident."
 }
