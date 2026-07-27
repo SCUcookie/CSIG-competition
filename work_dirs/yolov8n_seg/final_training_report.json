@@ -1,37 +1,320 @@
 {
-  "training_config": "work_dirs/yolov8n_seg/train_config.json",
-  "data_paths": {
-    "train": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/train",
-    "val": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/val"
+  "generated_at": "2026-07-27T13:27:25+08:00",
+  "git": {
+    "commit": "e29268044ee4720859c3d68e0b148b642f5a1cf4",
+    "short_commit": "e292680",
+    "status_short": []
   },
-  "sequences": {
-    "train": 1433,
-    "val": 255
+  "status": {
+    "training": "complete",
+    "local_proxy_evaluation": "complete",
+    "official_test_submission": "not complete; official test directory was not provided in this run",
+    "codabench_upload": "not performed",
+    "test_labels": "not read or generated"
   },
-  "weights": "work_dirs/yolov8n_seg/ultralytics/weights/best.pt",
-  "weights_sha256": "f923c668478f1d478034d6f32bc8b2c54fafdddb3a5daa11c98facb7ca69ee19",
-  "epochs_completed": 50,
-  "nan_inf_found": false,
-  "ultralytics_val_metrics": {
-    "mask_map50": 0.8207
+  "environment": {
+    "gpu_check": "nvidia-smi available through scripts/gpu_session.sh; 7 x NVIDIA GeForce RTX 4090 observed",
+    "torch": "2.4.1+cu121",
+    "ultralytics": "8.3.39"
   },
-  "local_proxy_metrics": {
-    "status": "Evaluation timed out/stuck, process killed. Manual intervention might be needed. (Proxy metrics unavailable)"
+  "data": {
+    "train_root": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/train",
+    "val_root": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/val",
+    "train_sequences": 1433,
+    "train_frames": 122887,
+    "val_sequences": 255,
+    "val_frames": 23087,
+    "val_resolution_frame_counts": {
+      "1024x1024": 3929,
+      "256x256": 11500,
+      "470x560": 611,
+      "550x650": 169,
+      "550x680": 382,
+      "640x512": 2279,
+      "640x640": 980,
+      "650x580": 337,
+      "660x620": 546,
+      "680x670": 374,
+      "760x800": 787,
+      "760x910": 261,
+      "820x840": 383,
+      "990x840": 549
+    }
   },
-  "online_submission_incident": {
-    "final_score": 0.81,
-    "f1_score": 0.0081,
-    "track_accuracy": 0,
-    "track_completeness": 0,
-    "root_cause": "Legacy export calculated centroids on result.masks.data without restoring original-image coordinates.",
-    "status": "Coordinate fix implemented; existing submission ZIP is invalid and must not be reused."
+  "training_config": {
+    "raw_root": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/train",
+    "val_root": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/val",
+    "work_dir": "work_dirs/yolov8n_seg",
+    "weights": {
+      "path": "work_dirs/yolov8n_seg/yolov8n-seg.pt",
+      "sha256": "a7cd8f929e1903d78a12a48efecab430209f18dc46cb96c3599a5980c63c423c",
+      "source": "local"
+    },
+    "device": "0,1,2,3",
+    "imgsz": 640,
+    "epochs": 50,
+    "amp": true,
+    "cache": false,
+    "max_sequences": null,
+    "max_frames": null
   },
-  "txt_zip_validation": {
+  "weights": {
+    "best_pt": {
+      "path": "work_dirs/yolov8n_seg/ultralytics/weights/best.pt",
+      "sha256": "f923c668478f1d478034d6f32bc8b2c54fafdddb3a5daa11c98facb7ca69ee19"
+    },
+    "last_pt": {
+      "path": "work_dirs/yolov8n_seg/ultralytics/weights/last.pt",
+      "sha256": "1b4253f7693fd56055cbfe392f87b00e8a5d9876adb0b5caf3b5749d15494712"
+    },
+    "initial_weights": {
+      "path": "work_dirs/yolov8n_seg/yolov8n-seg.pt",
+      "sha256": "a7cd8f929e1903d78a12a48efecab430209f18dc46cb96c3599a5980c63c423c",
+      "source": "local"
+    }
+  },
+  "training_results": {
+    "epochs_completed": 50,
+    "elapsed_seconds": 41762.8,
+    "nan_or_inf": false,
+    "last_epoch": {
+      "epoch": 50.0,
+      "time": 41762.8,
+      "train/box_loss": 2.21779,
+      "train/seg_loss": 2.99441,
+      "train/cls_loss": 1.54988,
+      "train/dfl_loss": 0.6314,
+      "metrics/precision(B)": 0.30701,
+      "metrics/recall(B)": 0.08901,
+      "metrics/mAP50(B)": 0.08207,
+      "metrics/mAP50-95(B)": 0.02855,
+      "metrics/precision(M)": 0.12946,
+      "metrics/recall(M)": 0.17187,
+      "metrics/mAP50(M)": 0.07124,
+      "metrics/mAP50-95(M)": 0.02713,
+      "val/box_loss": 2.1305,
+      "val/seg_loss": 4.79705,
+      "val/cls_loss": 1.85151,
+      "val/dfl_loss": 0.52818,
+      "lr/pg0": 0.000298,
+      "lr/pg1": 0.000298,
+      "lr/pg2": 0.000298
+    },
+    "ultralytics_val_metrics": {
+      "box_precision": 0.30701,
+      "box_recall": 0.08901,
+      "box_map50": 0.08207,
+      "box_map50_95": 0.02855,
+      "mask_precision": 0.12946,
+      "mask_recall": 0.17187,
+      "mask_map50": 0.07124,
+      "mask_map50_95": 0.02713
+    }
+  },
+  "local_proxy_evaluation": {
+    "path": "work_dirs/yolov8n_seg/score_recovery_full_b4/val_proxy_metrics.json",
+    "status": "local proxy; not official scorer",
+    "model": "work_dirs/yolov8n_seg/ultralytics/weights/best.pt",
+    "val_root": "/data2/2025/ldh/SatVideoIRSDT_v1_train_val/val",
+    "imgsz": 640,
+    "batch": 4,
+    "radius_pixels": 2.0,
+    "best_confidence": 0.01,
+    "precision": 0.4660022388329181,
+    "recall": 0.2933487906892162,
+    "f1": 0.36004742972727904,
+    "tp": 25810,
+    "fp": 29576,
+    "fn": 62174,
+    "best_resolution_breakdown": {
+      "1024x1024": {
+        "confidence": 0.01,
+        "tp": 514,
+        "fp": 983,
+        "fn": 8025,
+        "precision": 0.34335337341349365,
+        "recall": 0.06019440215481907,
+        "f1": 0.10243124750896772
+      },
+      "256x256": {
+        "confidence": 0.01,
+        "tp": 24618,
+        "fp": 27265,
+        "fn": 36034,
+        "precision": 0.4744906809552262,
+        "recall": 0.40588933588340037,
+        "f1": 0.437517216865864
+      },
+      "470x560": {
+        "confidence": 0.01,
+        "tp": 7,
+        "fp": 0,
+        "fn": 604,
+        "precision": 1.0,
+        "recall": 0.011456628477905073,
+        "f1": 0.022653721682847898
+      },
+      "550x650": {
+        "confidence": 0.01,
+        "tp": 1,
+        "fp": 18,
+        "fn": 1009,
+        "precision": 0.05263157894736842,
+        "recall": 0.0009900990099009901,
+        "f1": 0.001943634596695821
+      },
+      "550x680": {
+        "confidence": 0.01,
+        "tp": 15,
+        "fp": 11,
+        "fn": 1131,
+        "precision": 0.5769230769230769,
+        "recall": 0.013089005235602094,
+        "f1": 0.025597269624573378
+      },
+      "640x512": {
+        "confidence": 0.01,
+        "tp": 0,
+        "fp": 8,
+        "fn": 4488,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "640x640": {
+        "confidence": 0.01,
+        "tp": 0,
+        "fp": 425,
+        "fn": 980,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "650x580": {
+        "confidence": 0.01,
+        "tp": 275,
+        "fp": 43,
+        "fn": 1073,
+        "precision": 0.8647798742138365,
+        "recall": 0.20400593471810088,
+        "f1": 0.33013205282112845
+      },
+      "660x620": {
+        "confidence": 0.01,
+        "tp": 166,
+        "fp": 697,
+        "fn": 1459,
+        "precision": 0.19235225955967555,
+        "recall": 0.10215384615384615,
+        "f1": 0.13344051446945338
+      },
+      "680x670": {
+        "confidence": 0.01,
+        "tp": 16,
+        "fp": 5,
+        "fn": 732,
+        "precision": 0.7619047619047619,
+        "recall": 0.0213903743315508,
+        "f1": 0.04161248374512354
+      },
+      "760x800": {
+        "confidence": 0.01,
+        "tp": 0,
+        "fp": 0,
+        "fn": 1574,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "760x910": {
+        "confidence": 0.01,
+        "tp": 0,
+        "fp": 0,
+        "fn": 522,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "820x840": {
+        "confidence": 0.01,
+        "tp": 88,
+        "fp": 108,
+        "fn": 1827,
+        "precision": 0.4489795918367347,
+        "recall": 0.045953002610966055,
+        "f1": 0.08337280909521554
+      },
+      "990x840": {
+        "confidence": 0.01,
+        "tp": 110,
+        "fp": 13,
+        "fn": 2716,
+        "precision": 0.8943089430894309,
+        "recall": 0.038924274593064405,
+        "f1": 0.07460155985079688
+      }
+    },
+    "note": "batch=16 failed with CUDA OOM on the full validation set; batch=4 completed successfully."
+  },
+  "validation_predictions": {
+    "output_dir": "work_dirs/yolov8n_seg/val_predictions_coordfix_v2_b4",
+    "zip": "work_dirs/yolov8n_seg/val_predictions_coordfix_v2_b4.zip",
+    "zip_sha256": "27c216012c31002af22382ca84fe828e2c188b4a285d733ba46e83f864945ad9",
+    "coordinate_order": "xy",
+    "centroid_coordinates": "original-image pixels",
+    "confidence": 0.01,
     "txt_count": 255,
-    "zip_valid": true,
-    "coordinate_order_checked": "xy",
-    "original_image_coordinate_scale_checked": false,
-    "subdirectories_present": false
+    "zip_entry_count": 255,
+    "zip_root_only": true,
+    "frames_checked": 23087,
+    "coordinates_checked": 55386,
+    "unique_track_ids": [
+      0
+    ],
+    "detections_by_track_id": {
+      "0": 55386
+    },
+    "all_checks_passed": true,
+    "errors": [],
+    "empty_frame_sample": {
+      "sequence": "000001",
+      "frame": "00002",
+      "line": "00002 0"
+    },
+    "nonempty_frame_sample": {
+      "sequence": "000001",
+      "frame": "00001",
+      "width": 256,
+      "height": 256,
+      "first_target": [
+        0,
+        180.992889,
+        84.145973
+      ],
+      "line": "00001 2 0 180.992889 84.145973 0 139.081696 248.077454"
+    },
+    "non_square_frame_sample": {
+      "sequence": "000201_01",
+      "frame": "00016",
+      "width": 640,
+      "height": 512,
+      "first_target": [
+        0,
+        107.873909,
+        365.1073
+      ],
+      "line": "00016 1 0 107.873909 365.107300"
+    }
   },
-  "test_set_status": "An online detection submission was evaluated after this initial report; see online_submission_incident."
+  "commands_run": [
+    "python -m pip install -e .",
+    "pytest -q",
+    "python -m jinsight_track1.cli smoke",
+    "bash scripts/gpu_session.sh nvidia-smi",
+    "bash scripts/gpu_session.sh python -c \"import torch; import ultralytics; ...\"",
+    "bash scripts/gpu_session.sh python -m jinsight_track1.cli yolo-eval ... score_recovery_smoke --batch 16 --max-sequences 4 --max-frames 20",
+    "bash scripts/gpu_session.sh python -m jinsight_track1.cli yolo-eval ... score_recovery_full --batch 16 (failed: CUDA OOM)",
+    "bash scripts/gpu_session.sh env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -m jinsight_track1.cli yolo-eval ... score_recovery_full_b4 --batch 4",
+    "bash scripts/gpu_session.sh env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python -m jinsight_track1.cli yolo-infer ... val_predictions_coordfix_v2_b4 --batch 4 --conf 0.01 --coordinate-order xy"
+  ]
 }
