@@ -12,6 +12,7 @@ from .submission import write_txt, package
 from .baseline import train_threshold, infer_threshold
 from .yolo_seg import prepare_yolo_dataset, train_yolo, infer_yolo, evaluate_yolo
 from .deeppro_adapter import evaluate_deeppro, infer_deeppro
+from .deeppro_train import train_deeppro
 
 
 def _confidence_grid(value):
@@ -75,6 +76,11 @@ def main(argv=None):
     q.add_argument("source_root"); q.add_argument("weights"); q.add_argument("data_root"); q.add_argument("output"); q.add_argument("--threshold",type=float,required=True)
     q.add_argument("--device",default="0"); q.add_argument("--coordinate-order",choices=["xy","yx"],default="xy"); q.add_argument("--tile-size",type=int,default=256); q.add_argument("--tile-halo",type=int,default=12); q.add_argument("--min-area",type=int,default=1); q.add_argument("--max-area",type=int)
     q.add_argument("--max-sequences",type=int); q.add_argument("--max-frames",type=int); q.add_argument("--no-package",action="store_true")
+    q=sub.add_parser("deeppro-train", help="fine-tune pinned DeepPro weights on challenge sequences")
+    q.add_argument("source_root"); q.add_argument("initial_weights"); q.add_argument("train_root"); q.add_argument("output")
+    q.add_argument("--devices",default="3,4,5,6"); q.add_argument("--epochs",type=int,default=10); q.add_argument("--batch-size",type=int,default=16)
+    q.add_argument("--learning-rate",type=float,default=1e-4); q.add_argument("--weight-decay",type=float,default=1e-4); q.add_argument("--sample-rate",type=float,default=.04)
+    q.add_argument("--patch-size",type=int,default=128); q.add_argument("--sequence-length",type=int,default=40); q.add_argument("--workers",type=int,default=8); q.add_argument("--focal-weight",type=float,default=.5); q.add_argument("--seed",type=int,default=46)
     a=p.parse_args(argv)
     if a.command=="smoke": return smoke()
     if a.command=="inspect-data":
@@ -91,6 +97,8 @@ def main(argv=None):
         print(json.dumps(evaluate_deeppro(a.source_root,a.weights,a.val_root,a.output,a.device,a.threshold_grid,a.radius,a.max_sequences,a.max_frames,a.tile_size,a.tile_halo,a.min_area,a.max_area),indent=2)); return
     if a.command=="deeppro-infer":
         print(json.dumps(infer_deeppro(a.source_root,a.weights,a.data_root,a.output,a.threshold,a.device,a.coordinate_order,a.max_sequences,a.max_frames,a.tile_size,a.tile_halo,a.min_area,a.max_area,not a.no_package),indent=2)); return
+    if a.command=="deeppro-train":
+        print(json.dumps(train_deeppro(a.source_root,a.initial_weights,a.train_root,a.output,a.devices,a.epochs,a.batch_size,a.learning_rate,a.weight_decay,a.sample_rate,a.patch_size,a.sequence_length,a.workers,a.focal_weight,a.seed),indent=2)); return
     # infer intentionally uses only the deterministic fake detector in this baseline.
     seqs=discover_sequences(a.root,a.max_sequences,a.max_frames); out=Path(a.output); out.mkdir(parents=True,exist_ok=True)
     for s in seqs:
