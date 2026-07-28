@@ -129,7 +129,10 @@ class DeepProDetector:
             checkpoint = torch.load(
                 str(checkpoint_path), map_location="cpu", weights_only=True
             )
-        except TypeError:  # PyTorch before weights_only was added
+        except Exception:
+            # Official checkpoints include a NumPy scalar in optimizer state,
+            # which older safe unpicklers reject. The path is an explicitly
+            # pinned, user-supplied official checkpoint rather than discovery.
             checkpoint = torch.load(str(checkpoint_path), map_location="cpu")
         state = checkpoint.get("model_state_dict", checkpoint)
         if state and all(key.startswith("module.") for key in state):
