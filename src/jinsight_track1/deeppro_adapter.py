@@ -170,8 +170,12 @@ class DeepProDetector:
                 valid = end - start
                 chunk = values[start:end].astype(np.float32, copy=False)
                 if valid < self.sequence_length:
-                    pad = np.zeros(
-                        (self.sequence_length - valid, height, width), dtype=np.float32
+                    # Training pads *after* normalization, so padded temporal
+                    # slots must equal the training mean in raw-image space.
+                    pad = np.full(
+                        (self.sequence_length - valid, height, width),
+                        self.mean,
+                        dtype=np.float32,
                     )
                     chunk = np.concatenate((chunk, pad), axis=0)
                 window = np.zeros((valid, height, width), dtype=np.float32)
