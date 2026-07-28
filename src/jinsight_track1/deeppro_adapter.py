@@ -23,6 +23,11 @@ from .postprocess import centroids
 from .submission import package, write_txt
 from .types import SequencePrediction, TrackPoint
 
+try:
+    import cv2
+except ImportError:  # pragma: no cover - scipy fallback is covered
+    cv2 = None
+
 
 class DeepProUnavailable(RuntimeError):
     pass
@@ -62,6 +67,19 @@ def component_points(probability: np.ndarray, threshold: float,
                      min_area: int = 1, max_area: int | None = None) -> list[tuple[float, float]]:
     """Return (x, y) centroids of 8-connected thresholded components."""
     binary = np.asarray(probability) >= threshold
+    if cv2 is not None:
+        count, _, stats, centres = cv2.connectedComponentsWithStats(
+            binary.astype(np.uint8), connectivity=8, ltype=cv2.CV_32S
+        )
+        found = []
+        for label in range(1, count):
+            area = int(stats[label, cv2.CC_STAT_AREA])
+            if area < min_area or (max_area is not None and area > max_area):
+                continue
+            x, y = centres[label]
+            if np.isfinite((x, y)).all():
+                found.append((float(x), float(y)))
+        return found
     labels, count = ndimage.label(binary, np.ones((3, 3), dtype=np.uint8))
     if count == 0:
         return []
