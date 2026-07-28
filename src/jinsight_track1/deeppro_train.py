@@ -101,6 +101,12 @@ def train_deeppro(
         patch_size=patch_size,
         transform=None,
     )
+    # NumPy 2 rejects ``np.random.choice(list_of_variable_length_lists)`` in
+    # the official loader. A genuine 1-D object array preserves its intended
+    # weighted choice semantics without changing the pinned source checkout.
+    sample_array = np.empty(len(dataset.samplelist), dtype=object)
+    sample_array[:] = dataset.samplelist
+    dataset.samplelist = sample_array
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
