@@ -305,6 +305,24 @@ def evaluate_deeppro(
 
     sweep = [_summary(totals[value], value) for value in thresholds]
     best = max(sweep, key=lambda row: (row["f1"], row["recall"], row["precision"]))
+    resolution_names = sorted(
+        {name for threshold_rows in by_resolution.values() for name in threshold_rows}
+    )
+    resolution_sweeps = {
+        name: [
+            _summary(
+                by_resolution[threshold].get(name, defaultdict(float)), threshold
+            )
+            for threshold in thresholds
+        ]
+        for name in resolution_names
+    }
+    best_threshold_by_resolution = {
+        name: max(
+            rows, key=lambda row: (row["f1"], row["recall"], row["precision"])
+        )
+        for name, rows in resolution_sweeps.items()
+    }
     best_resolution = {
         name: _summary(values, best["threshold"])
         for name, values in sorted(by_resolution[best["threshold"]].items())
@@ -319,6 +337,8 @@ def evaluate_deeppro(
         "best_threshold": best["threshold"],
         "sweep": sweep,
         "best_resolution_breakdown": best_resolution,
+        "resolution_sweeps": resolution_sweeps,
+        "best_threshold_by_resolution": best_threshold_by_resolution,
         "radius_pixels": radius,
         "tile_size": tile_size,
         "tile_halo": tile_halo,
@@ -347,6 +367,7 @@ def infer_deeppro(
     min_area: int = 1,
     max_area: int | None = None,
     make_zip: bool = True,
+    threshold_by_resolution: dict[str, float] | None = None,
 ) -> dict:
     detector = DeepProDetector(
         source_root, weights, device=device, tile_size=tile_size, tile_halo=tile_halo
@@ -362,9 +383,19 @@ def infer_deeppro(
         stems, frames = _load_sequence_images(sequence, max_frames)
         probabilities = detector.predict(frames)
         prediction_frames = {}
+        height, width = frames.shape[1:] if len(frames) else (0, 0)
+        resolution = f"{width}x{height}"
+        sequence_threshold = (
+            threshold_by_resolution.get(resolution, threshold)
+            if threshold_by_resolution
+            else threshold
+        )
         for index, _ in enumerate(stems, 1):
             points = component_points(
-                probabilities[index - 1], threshold, min_area=min_area, max_area=max_area
+                probabilities[index - 1],
+                sequence_threshold,
+                min_area=min_area,
+                max_area=max_area,
             )
             prediction_frames[index] = [
                 TrackPoint(index, 0, x, y) for x, y in points
@@ -394,6 +425,7 @@ def infer_deeppro(
         "frames": frame_count,
         "detections": detections,
         "threshold": threshold,
+        "threshold_by_resolution": threshold_by_resolution,
         "coordinate_order": coordinate_order,
         "output_dir": str(output),
         "zip": str(zip_path) if zip_path else None,
