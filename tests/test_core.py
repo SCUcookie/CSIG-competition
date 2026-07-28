@@ -7,6 +7,7 @@ from jinsight_track1.types import SequencePrediction,TrackPoint
 from jinsight_track1.submission import render,parse
 from jinsight_track1.evaluation import point_metrics
 from jinsight_track1.yolo_seg import _prediction_points
+from jinsight_track1.deeppro_adapter import component_points, temporal_windows
 def test_centroid_xy_and_eight_connectivity():
     a=np.zeros((10,12)); a[2:4,7:9]=1; a[4,9]=1
     d=centroids(a,min_area=2)[0]; assert abs(d.x-7.8)<.3 and abs(d.y-3.0)<.3
@@ -52,3 +53,19 @@ def test_yolo_centroid_falls_back_to_original_box_and_filters_confidence():
     assert _prediction_points(result, .25) == []
     point = _prediction_points(result, .1)[0]
     assert np.allclose(point[:2], (90.0, 40.0))
+
+
+def test_deeppro_temporal_windows_cover_and_end_align():
+    windows = temporal_windows(100, 40, 4)
+    assert windows == [(0, 40), (36, 76), (60, 100)]
+    assert set().union(*(set(range(a, b)) for a, b in windows)) == set(range(100))
+    assert temporal_windows(12, 40, 4) == [(0, 12)]
+
+
+def test_deeppro_component_points_are_xy_and_area_filtered():
+    probability = np.zeros((10, 12), dtype=float)
+    probability[2:4, 7:9] = .9
+    probability[8, 1] = .8
+    points = component_points(probability, .5, min_area=2)
+    assert len(points) == 1
+    assert np.allclose(points[0], (7.5, 2.5))
