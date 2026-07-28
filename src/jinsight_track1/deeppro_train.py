@@ -2,13 +2,62 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
 
 from .deeppro_adapter import DeepProDetector, _sequences
+
+
+def _fast_sample_sequence(self, idx):
+    """Compatibility sampler with O(log N), not NumPy's O(N) weighted choice."""
+    import torch
+    from skimage import measure
+
+    sample_index = int(np.searchsorted(self._sample_cdf, np.random.random(), side="right"))
+    sample_index = min(sample_index, len(self.samplelist) - 1)
+    sample = self.samplelist[sample_index]
+    image_parts, label_parts = [], []
+    for image_path, label_path in sample:
+        image, label = self.get_image_label(image_path, label_path)
+        image_parts.append(image)
+        label_parts.append(label)
+    images = np.concatenate(image_parts, axis=1)
+    labels = np.concatenate(label_parts, axis=0)
+    images = (images - self.train_mean) / self.train_std
+    time_count, height, width = labels.shape
+    if time_count < self.seq_len:
+        pad_count = self.seq_len - time_count
+        image_pad = np.zeros((1, pad_count, height, width), dtype=images.dtype)
+        label_pad = np.zeros((pad_count, height, width), dtype=labels.dtype)
+        if idx % 2:
+            images = np.concatenate((images, image_pad), axis=1)
+            labels = np.concatenate((labels, label_pad), axis=0)
+        else:
+            images = np.concatenate((image_pad, images), axis=1)
+            labels = np.concatenate((label_pad, labels), axis=0)
+
+    if self.patch_size is not None:
+        middle = int(time_count / 2) if idx % 2 else self.seq_len - math.ceil(time_count / 2)
+        labelled = measure.label(labels[middle], connectivity=2)
+        regions = measure.regionprops(labelled, cache=True)
+        shake = int(self.patch_size / 6)
+        if regions and random.random() < .75:
+            region = random.choice(regions)
+            row = int(region.centroid[0] + random.uniform(-shake, shake) - self.patch_size / 2)
+            col = int(region.centroid[1] + random.uniform(-shake, shake) - self.patch_size / 2)
+            row = min(max(row, 0), height - self.patch_size)
+            col = min(max(col, 0), width - self.patch_size)
+        else:
+            row = random.randrange(0, height - self.patch_size + 1)
+            col = random.randrange(0, width - self.patch_size + 1)
+        images = images[:, :, row:row + self.patch_size, col:col + self.patch_size]
+        labels = labels[:, row:row + self.patch_size, col:col + self.patch_size]
+    return torch.from_numpy(images), torch.from_numpy(labels)
 
 
 def _dataset_config(train_root: Path, output: Path) -> Path:
@@ -101,12 +150,13 @@ def train_deeppro(
         patch_size=patch_size,
         transform=None,
     )
-    # NumPy 2 rejects ``np.random.choice(list_of_variable_length_lists)`` in
-    # the official loader. A genuine 1-D object array preserves its intended
-    # weighted choice semantics without changing the pinned source checkout.
-    sample_array = np.empty(len(dataset.samplelist), dtype=object)
-    sample_array[:] = dataset.samplelist
-    dataset.samplelist = sample_array
+    # The official loader calls weighted np.random.choice over ~95k variable
+    # length Python lists for every crop. NumPy 2 rejects the shape, and even
+    # an object array scans all weights per sample. Bind a CDF sampler that
+    # preserves the intended probabilities in O(log N).
+    dataset._sample_cdf = np.cumsum(np.asarray(dataset.sample_p, dtype=np.float64))
+    dataset._sample_cdf[-1] = 1.0
+    dataset.sample_sequence = types.MethodType(_fast_sample_sequence, dataset)
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
