@@ -125,7 +125,12 @@ class DeepProDetector:
 
         torch_device = torch.device("cpu" if device == "cpu" else f"cuda:{device}")
         model = module.detector(1, sequence_length, sequence_length)
-        checkpoint = torch.load(str(checkpoint_path), map_location="cpu")
+        try:
+            checkpoint = torch.load(
+                str(checkpoint_path), map_location="cpu", weights_only=True
+            )
+        except TypeError:  # PyTorch before weights_only was added
+            checkpoint = torch.load(str(checkpoint_path), map_location="cpu")
         state = checkpoint.get("model_state_dict", checkpoint)
         if state and all(key.startswith("module.") for key in state):
             state = {key[7:]: value for key, value in state.items()}
@@ -251,8 +256,10 @@ def evaluate_deeppro(
     totals = {value: defaultdict(float) for value in thresholds}
     by_resolution = {value: {} for value in thresholds}
     frame_count = 0
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
 
-    for sequence in sequences:
+    for sequence_index, sequence in enumerate(sequences, 1):
         stems, frames = _load_sequence_images(sequence, max_frames)
         probabilities = detector.predict(frames)
         masks = _files(sequence / "mask")
@@ -275,6 +282,23 @@ def evaluate_deeppro(
                     totals[threshold][key] += metrics[key]
                     bucket[key] += metrics[key]
             frame_count += 1
+        partial_sweep = [_summary(totals[value], value) for value in thresholds]
+        progress = {
+            "status": "running",
+            "completed_sequences": sequence_index,
+            "total_sequences": len(sequences),
+            "last_sequence": sequence.name,
+            "frames": frame_count,
+            "sweep": partial_sweep,
+        }
+        (output / "progress.json").write_text(
+            json.dumps(progress, indent=2), encoding="utf-8"
+        )
+        print(
+            f"deeppro-eval {sequence_index}/{len(sequences)} "
+            f"sequence={sequence.name} frames={frame_count}",
+            flush=True,
+        )
 
     sweep = [_summary(totals[value], value) for value in thresholds]
     best = max(sweep, key=lambda row: (row["f1"], row["recall"], row["precision"]))
@@ -299,8 +323,6 @@ def evaluate_deeppro(
         "component_max_area": max_area,
         "metric_status": "local point-matching proxy; not official scorer",
     }
-    output = Path(output_dir)
-    output.mkdir(parents=True, exist_ok=True)
     (output / "val_proxy_metrics.json").write_text(
         json.dumps(report, indent=2), encoding="utf-8"
     )
