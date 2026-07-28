@@ -8,6 +8,7 @@ from jinsight_track1.submission import render,parse
 from jinsight_track1.evaluation import point_metrics
 from jinsight_track1.yolo_seg import _prediction_points
 from jinsight_track1.deeppro_adapter import component_points, temporal_windows
+from jinsight_track1.tracking import assign_track_ids
 def test_centroid_xy_and_eight_connectivity():
     a=np.zeros((10,12)); a[2:4,7:9]=1; a[4,9]=1
     d=centroids(a,min_area=2)[0]; assert abs(d.x-7.8)<.3 and abs(d.y-3.0)<.3
@@ -69,3 +70,10 @@ def test_deeppro_component_points_are_xy_and_area_filtered():
     points = component_points(probability, .5, min_area=2)
     assert len(points) == 1
     assert np.allclose(points[0], (7.5, 2.5))
+
+
+def test_tracking_ids_are_stable_without_dropping_initial_detections():
+    frames = [[(2, 3)], [(3, 3)], [], [(5, 3)]]
+    tracked = assign_track_ids(frames, (100, 100), max_age=3)
+    assert tracked[1][0].track_id == tracked[2][0].track_id == tracked[4][0].track_id
+    assert len(tracked[1]) == 1 and tracked[3] == []

@@ -22,6 +22,7 @@ from .evaluation import point_metrics
 from .postprocess import centroids
 from .submission import package, write_txt
 from .types import SequencePrediction, TrackPoint
+from .tracking import assign_track_ids
 
 try:
     import cv2
@@ -386,6 +387,7 @@ def infer_deeppro(
     max_area: int | None = None,
     make_zip: bool = True,
     threshold_by_resolution: dict[str, float] | None = None,
+    track: bool = False,
 ) -> dict:
     detector = DeepProDetector(
         source_root, weights, device=device, tile_size=tile_size, tile_halo=tile_halo
@@ -401,6 +403,7 @@ def infer_deeppro(
         stems, frames = _load_sequence_images(sequence, max_frames)
         probabilities = detector.predict(frames)
         prediction_frames = {}
+        point_frames = []
         height, width = frames.shape[1:] if len(frames) else (0, 0)
         resolution = f"{width}x{height}"
         sequence_threshold = (
@@ -415,11 +418,16 @@ def infer_deeppro(
                 min_area=min_area,
                 max_area=max_area,
             )
-            prediction_frames[index] = [
-                TrackPoint(index, 0, x, y) for x, y in points
-            ]
+            point_frames.append(points)
             detections += len(points)
             frame_count += 1
+        if track:
+            prediction_frames = assign_track_ids(point_frames, (height, width))
+        else:
+            prediction_frames = {
+                index: [TrackPoint(index, 0, x, y) for x, y in points]
+                for index, points in enumerate(point_frames, 1)
+            }
         write_txt(
             SequencePrediction(sequence.name, prediction_frames),
             output / f"{sequence.name}.txt",
@@ -444,6 +452,7 @@ def infer_deeppro(
         "detections": detections,
         "threshold": threshold,
         "threshold_by_resolution": threshold_by_resolution,
+        "tracking": track,
         "coordinate_order": coordinate_order,
         "output_dir": str(output),
         "zip": str(zip_path) if zip_path else None,
