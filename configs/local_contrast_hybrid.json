@@ -1,0 +1,26 @@
+{
+  "470x560": {
+    "method": "dog_bright",
+    "top_k": 1
+  },
+  "550x680": {
+    "method": "dog_bright",
+    "top_k": 1
+  },
+  "660x620": {
+    "method": "tophat_5",
+    "top_k": 2
+  },
+  "760x800": {
+    "method": "dog_bright",
+    "top_k": 1
+  },
+  "820x840": {
+    "method": "z_bright",
+    "top_k": 3
+  },
+  "990x840": {
+    "method": "tophat_5",
+    "top_k": 5
+  }
+}
