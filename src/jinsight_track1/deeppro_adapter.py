@@ -112,6 +112,7 @@ class DeepProDetector:
         tile_halo: int = 12,
         mean: float = 111.47,
         std: float = 22.43,
+        adaptive_normalization: bool = False,
     ):
         source = Path(source_root).resolve()
         checkpoint_path = Path(weights).resolve()
@@ -169,6 +170,7 @@ class DeepProDetector:
         self.tile_halo = tile_halo
         self.mean = float(mean)
         self.std = float(std)
+        self.adaptive_normalization = bool(adaptive_normalization)
 
     def _spatial_tiles(self, height: int, width: int):
         core = self.tile_size - 2 * self.tile_halo
@@ -186,6 +188,12 @@ class DeepProDetector:
         if values.ndim != 3:
             raise ValueError("frames must have shape [time, height, width]")
         count, height, width = values.shape
+        if self.adaptive_normalization and values.size:
+            normalization_mean = float(values.mean())
+            normalization_std = max(float(values.std()), 1.0)
+        else:
+            normalization_mean = self.mean
+            normalization_std = self.std
         merged = np.zeros((count, height, width), dtype=np.float32)
         coverage = np.zeros(count, dtype=np.uint16)
         torch = self.torch
@@ -201,7 +209,7 @@ class DeepProDetector:
                     # slots must equal the training mean in raw-image space.
                     pad = np.full(
                         (self.sequence_length - valid, height, width),
-                        self.mean,
+                        normalization_mean,
                         dtype=np.float32,
                     )
                     chunk = np.concatenate((chunk, pad), axis=0)
@@ -209,7 +217,9 @@ class DeepProDetector:
                 for core, incoming in self._spatial_tiles(height, width):
                     y0, y1, x0, x1 = core
                     iy0, iy1, ix0, ix1 = incoming
-                    tile = (chunk[:, iy0:iy1, ix0:ix1] - self.mean) / self.std
+                    tile = (
+                        chunk[:, iy0:iy1, ix0:ix1] - normalization_mean
+                    ) / normalization_std
                     tensor = torch.from_numpy(tile[None, None]).to(self.device)
                     _, logits = self.model(tensor)
                     probability = torch.sigmoid(logits)[0, :valid].float().cpu().numpy()
@@ -264,12 +274,18 @@ def evaluate_deeppro(
     tile_halo: int = 12,
     min_area: int = 1,
     max_area: int | None = None,
+    adaptive_normalization: bool = False,
 ) -> dict:
     thresholds = sorted(set(thresholds or [1e-5, 1e-4, 1e-3, 1e-2, .1, .5]))
     if not thresholds or any(value <= 0 or value >= 1 for value in thresholds):
         raise ValueError("thresholds must be between 0 and 1")
     detector = DeepProDetector(
-        source_root, weights, device=device, tile_size=tile_size, tile_halo=tile_halo
+        source_root,
+        weights,
+        device=device,
+        tile_size=tile_size,
+        tile_halo=tile_halo,
+        adaptive_normalization=adaptive_normalization,
     )
     root = Path(val_root)
     sequences = _sequences(root)
@@ -363,6 +379,7 @@ def evaluate_deeppro(
         "tile_halo": tile_halo,
         "component_min_area": min_area,
         "component_max_area": max_area,
+        "adaptive_normalization": adaptive_normalization,
         "metric_status": "local point-matching proxy; not official scorer",
     }
     (output / "val_proxy_metrics.json").write_text(
@@ -388,9 +405,15 @@ def infer_deeppro(
     make_zip: bool = True,
     threshold_by_resolution: dict[str, float] | None = None,
     track: bool = False,
+    adaptive_normalization: bool = False,
 ) -> dict:
     detector = DeepProDetector(
-        source_root, weights, device=device, tile_size=tile_size, tile_halo=tile_halo
+        source_root,
+        weights,
+        device=device,
+        tile_size=tile_size,
+        tile_halo=tile_halo,
+        adaptive_normalization=adaptive_normalization,
     )
     root, output = Path(data_root), Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -452,6 +475,7 @@ def infer_deeppro(
         "detections": detections,
         "threshold": threshold,
         "threshold_by_resolution": threshold_by_resolution,
+        "adaptive_normalization": adaptive_normalization,
         "tracking": track,
         "coordinate_order": coordinate_order,
         "output_dir": str(output),

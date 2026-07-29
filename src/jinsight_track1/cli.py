@@ -11,6 +11,7 @@ from .tracking import track_detections
 from .submission import write_txt, package
 from .baseline import train_threshold, infer_threshold
 from .yolo_seg import prepare_yolo_dataset, train_yolo, infer_yolo, evaluate_yolo
+from .local_contrast import infer_local_contrast
 from .deeppro_adapter import evaluate_deeppro, infer_deeppro
 from .deeppro_train import train_deeppro
 
@@ -83,14 +84,17 @@ def main(argv=None):
     q.add_argument("model"); q.add_argument("data_root"); q.add_argument("output"); q.add_argument("--device",default="0"); q.add_argument("--conf",type=float,default=.25); q.add_argument("--batch",type=int,default=16); q.add_argument("--imgsz",type=int,default=640); q.add_argument("--max-sequences",type=int); q.add_argument("--max-frames",type=int); q.add_argument("--coordinate-order",choices=["xy","yx"],default="xy"); q.add_argument("--no-package",action="store_true")
     q=sub.add_parser("yolo-eval", help="local proxy point metrics against validation masks")
     q.add_argument("model"); q.add_argument("val_root"); q.add_argument("output"); q.add_argument("--device",default="0"); q.add_argument("--conf",type=float,default=.25); q.add_argument("--conf-grid",type=_confidence_grid); q.add_argument("--radius",type=float,default=2.); q.add_argument("--batch",type=int,default=16); q.add_argument("--imgsz",type=int,default=640); q.add_argument("--max-sequences",type=int); q.add_argument("--max-frames",type=int)
+    q=sub.add_parser("local-infer", help="infer selected resolutions with local contrast")
+    q.add_argument("data_root"); q.add_argument("output"); q.add_argument("config")
+    q.add_argument("--coordinate-order",choices=["xy","yx"],default="xy"); q.add_argument("--track",action="store_true"); q.add_argument("--no-package",action="store_true")
     q=sub.add_parser("deeppro-eval", help="evaluate a pinned official DeepPro checkout and checkpoint")
     q.add_argument("source_root"); q.add_argument("weights"); q.add_argument("val_root"); q.add_argument("output")
-    q.add_argument("--device",default="0"); q.add_argument("--threshold-grid",type=_positive_grid,default=[1e-5,1e-4,1e-3,1e-2,.1,.5]); q.add_argument("--radius",type=float,default=2.)
+    q.add_argument("--device",default="0"); q.add_argument("--threshold-grid",type=_positive_grid,default=[1e-5,1e-4,1e-3,1e-2,.1,.5]); q.add_argument("--radius",type=float,default=2.); q.add_argument("--adaptive-normalization",action="store_true")
     q.add_argument("--tile-size",type=int,default=256); q.add_argument("--tile-halo",type=int,default=12); q.add_argument("--min-area",type=int,default=1); q.add_argument("--max-area",type=int)
     q.add_argument("--max-sequences",type=int); q.add_argument("--max-frames",type=int)
     q=sub.add_parser("deeppro-infer", help="infer with DeepPro and build a centroid submission ZIP")
     q.add_argument("source_root"); q.add_argument("weights"); q.add_argument("data_root"); q.add_argument("output"); q.add_argument("--threshold",type=float,required=True)
-    q.add_argument("--device",default="0"); q.add_argument("--coordinate-order",choices=["xy","yx"],default="xy"); q.add_argument("--threshold-map",help="JSON report or resolution-to-threshold mapping"); q.add_argument("--tile-size",type=int,default=256); q.add_argument("--tile-halo",type=int,default=12); q.add_argument("--min-area",type=int,default=1); q.add_argument("--max-area",type=int)
+    q.add_argument("--device",default="0"); q.add_argument("--coordinate-order",choices=["xy","yx"],default="xy"); q.add_argument("--threshold-map",help="JSON report or resolution-to-threshold mapping"); q.add_argument("--tile-size",type=int,default=256); q.add_argument("--tile-halo",type=int,default=12); q.add_argument("--min-area",type=int,default=1); q.add_argument("--max-area",type=int); q.add_argument("--adaptive-normalization",action="store_true")
     q.add_argument("--max-sequences",type=int); q.add_argument("--max-frames",type=int); q.add_argument("--track",action="store_true"); q.add_argument("--no-package",action="store_true")
     q=sub.add_parser("deeppro-train", help="fine-tune pinned DeepPro weights on challenge sequences")
     q.add_argument("source_root"); q.add_argument("initial_weights"); q.add_argument("train_root"); q.add_argument("output")
@@ -109,10 +113,13 @@ def main(argv=None):
     if a.command=="yolo-train": print(json.dumps(train_yolo(a.train_root,a.work_dir,a.weights,a.val_root,a.device,a.imgsz,a.epochs,a.max_sequences,a.max_frames,a.download_weights,a.workers),indent=2)); return
     if a.command=="yolo-infer": print(json.dumps(infer_yolo(a.model,a.data_root,a.output,a.device,a.conf,a.coordinate_order,a.max_sequences,a.max_frames,not a.no_package,a.batch,a.imgsz),indent=2)); return
     if a.command=="yolo-eval": print(json.dumps(evaluate_yolo(a.model,a.val_root,a.output,a.device,a.conf,a.radius,a.batch,a.conf_grid,a.max_sequences,a.max_frames,a.imgsz),indent=2)); return
+    if a.command=="local-infer":
+        config=json.loads(Path(a.config).read_text(encoding="utf-8"))
+        print(json.dumps(infer_local_contrast(a.data_root,a.output,config,a.coordinate_order,a.track,not a.no_package),indent=2)); return
     if a.command=="deeppro-eval":
-        print(json.dumps(evaluate_deeppro(a.source_root,a.weights,a.val_root,a.output,a.device,a.threshold_grid,a.radius,a.max_sequences,a.max_frames,a.tile_size,a.tile_halo,a.min_area,a.max_area),indent=2)); return
+        print(json.dumps(evaluate_deeppro(a.source_root,a.weights,a.val_root,a.output,a.device,a.threshold_grid,a.radius,a.max_sequences,a.max_frames,a.tile_size,a.tile_halo,a.min_area,a.max_area,a.adaptive_normalization),indent=2)); return
     if a.command=="deeppro-infer":
-        print(json.dumps(infer_deeppro(a.source_root,a.weights,a.data_root,a.output,a.threshold,a.device,a.coordinate_order,a.max_sequences,a.max_frames,a.tile_size,a.tile_halo,a.min_area,a.max_area,not a.no_package,_load_threshold_map(a.threshold_map),a.track),indent=2)); return
+        print(json.dumps(infer_deeppro(a.source_root,a.weights,a.data_root,a.output,a.threshold,a.device,a.coordinate_order,a.max_sequences,a.max_frames,a.tile_size,a.tile_halo,a.min_area,a.max_area,not a.no_package,_load_threshold_map(a.threshold_map),a.track,a.adaptive_normalization),indent=2)); return
     if a.command=="deeppro-train":
         print(json.dumps(train_deeppro(a.source_root,a.initial_weights,a.train_root,a.output,a.devices,a.epochs,a.batch_size,a.learning_rate,a.weight_decay,a.sample_rate,a.patch_size,a.sequence_length,a.workers,a.focal_weight,a.seed),indent=2)); return
     # infer intentionally uses only the deterministic fake detector in this baseline.

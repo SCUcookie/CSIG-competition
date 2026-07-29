@@ -16,11 +16,62 @@ from .deeppro_adapter import DeepProDetector, _sequences
 def _fast_sample_sequence(self, idx):
     """Compatibility sampler with O(log N), not NumPy's O(N) weighted choice."""
     import torch
+    from PIL import Image
     from skimage import measure
 
     sample_index = int(np.searchsorted(self._sample_cdf, np.random.random(), side="right"))
     sample_index = min(sample_index, len(self.samplelist) - 1)
     sample = self.samplelist[sample_index]
+    if self.patch_size is not None and self.dataset == "SatVideoIRSDT":
+        # The official loader decodes all 40 full-resolution frames and only
+        # then crops to 128x128. Measured 1280x1024 sequences make each worker
+        # retain several GB. Select the crop from the middle mask first and
+        # decode only that region from every frame.
+        middle_path = sample[len(sample) // 2][1]
+        middle_label = np.asarray(Image.open(middle_path), dtype=np.uint8)
+        height, width = middle_label.shape
+        labelled = measure.label(middle_label > 0, connectivity=2)
+        regions = measure.regionprops(labelled, cache=True)
+        shake = int(self.patch_size / 6)
+        if regions and random.random() < .75:
+            region = random.choice(regions)
+            row = int(region.centroid[0] + random.uniform(-shake, shake) - self.patch_size / 2)
+            col = int(region.centroid[1] + random.uniform(-shake, shake) - self.patch_size / 2)
+            row = min(max(row, 0), height - self.patch_size)
+            col = min(max(col, 0), width - self.patch_size)
+        else:
+            row = random.randrange(0, height - self.patch_size + 1)
+            col = random.randrange(0, width - self.patch_size + 1)
+        box = (col, row, col + self.patch_size, row + self.patch_size)
+        image_parts, label_parts = [], []
+        for image_path, label_path in sample:
+            image_parts.append(
+                np.asarray(Image.open(image_path).crop(box), dtype=np.float32)
+            )
+            label = np.asarray(Image.open(label_path).crop(box), dtype=np.float32)
+            label_parts.append((label > 0).astype(np.float32))
+        images = np.stack(image_parts, axis=0)[None]
+        labels = np.stack(label_parts, axis=0)
+        images = (images - self.train_mean) / self.train_std
+        time_count = len(labels)
+        if time_count < self.seq_len:
+            pad_count = self.seq_len - time_count
+            image_pad = np.zeros(
+                (1, pad_count, self.patch_size, self.patch_size),
+                dtype=images.dtype,
+            )
+            label_pad = np.zeros(
+                (pad_count, self.patch_size, self.patch_size),
+                dtype=labels.dtype,
+            )
+            if idx % 2:
+                images = np.concatenate((images, image_pad), axis=1)
+                labels = np.concatenate((labels, label_pad), axis=0)
+            else:
+                images = np.concatenate((image_pad, images), axis=1)
+                labels = np.concatenate((label_pad, labels), axis=0)
+        return torch.from_numpy(images), torch.from_numpy(labels)
+
     image_parts, label_parts = [], []
     for image_path, label_path in sample:
         image, label = self.get_image_label(image_path, label_path)
