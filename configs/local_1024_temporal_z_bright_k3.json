@@ -1,0 +1,6 @@
+{
+  "1024x1024": {
+    "method": "temporal_z_bright",
+    "top_k": 3
+  }
+}

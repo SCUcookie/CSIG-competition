@@ -1,0 +1,6 @@
+{
+  "1024x1024": {
+    "method": "dog_bright",
+    "top_k": 1
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "000182": {
+    "backend": "deeppro",
+    "threshold": 0.1
+  },
+  "000184": {
+    "backend": "deeppro",
+    "threshold": 0.99999999
+  },
+  "000185": {
+    "backend": "deeppro",
+    "threshold": 0.9
+  },
+  "000186": {
+    "backend": "deeppro",
+    "threshold": 0.1
+  },
+  "000187": {
+    "backend": "deeppro",
+    "threshold": 0.1
+  },
+  "000188": {
+    "backend": "local_contrast",
+    "method": "dog_bright",
+    "top_k": 1
+  },
+  "000189": {
+    "backend": "deeppro",
+    "threshold": 0.1
+  },
+  "000193": {
+    "backend": "local_contrast",
+    "method": "temporal_z_bright",
+    "top_k": 3
+  },
+  "000197": {
+    "backend": "deeppro",
+    "threshold": 0.99999999
+  },
+  "000198": {
+    "backend": "deeppro",
+    "threshold": 0.1
+  }
+}
