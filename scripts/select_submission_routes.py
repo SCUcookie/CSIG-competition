@@ -14,8 +14,12 @@ def main() -> None:
     parser.add_argument("report")
     parser.add_argument(
         "candidates",
-        nargs="+",
-        help="LABEL=METRICS_JSON=SUBMISSION_DIR",
+        nargs="*",
+        help="LABEL=METRICS_JSON[=SUBMISSION_DIR]",
+    )
+    parser.add_argument(
+        "--candidate-report-dir",
+        help="also load all JSON reports containing candidate and submission fields",
     )
     parser.add_argument("--fixed-tp", type=int, default=0)
     parser.add_argument("--fixed-fp", type=int, default=0)
@@ -23,11 +27,37 @@ def main() -> None:
     args = parser.parse_args()
 
     candidates: dict[str, tuple[Path, dict[str, dict[str, float | int]]]] = {}
+    values: list[tuple[str, Path, Path | None]] = []
     for value in args.candidates:
-        label, metrics_path, submission_dir = value.split("=", 2)
+        parts = value.split("=", 2)
+        if len(parts) not in {2, 3}:
+            raise ValueError(f"invalid candidate specification: {value}")
+        values.append(
+            (
+                parts[0],
+                Path(parts[1]),
+                Path(parts[2]) if len(parts) == 3 else None,
+            )
+        )
+    if args.candidate_report_dir:
+        for metrics_path in sorted(Path(args.candidate_report_dir).glob("*.json")):
+            report = json.loads(metrics_path.read_text(encoding="utf-8"))
+            values.append(
+                (
+                    str(report["candidate"]),
+                    metrics_path,
+                    Path(report["submission"]),
+                )
+            )
+    if not values:
+        raise ValueError("at least one candidate report is required")
+
+    for label, metrics_path, submission_dir in values:
         metrics = json.loads(Path(metrics_path).read_text(encoding="utf-8"))
+        if submission_dir is None:
+            submission_dir = Path(metrics["submission"])
         candidates[label] = (
-            Path(submission_dir),
+            submission_dir,
             metrics["sequence_breakdown"],
         )
 
