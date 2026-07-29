@@ -19,6 +19,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--candidate-report-dir",
+        action="append",
         help="also load all JSON reports containing candidate and submission fields",
     )
     parser.add_argument("--fixed-tp", type=int, default=0)
@@ -40,15 +41,16 @@ def main() -> None:
             )
         )
     if args.candidate_report_dir:
-        for metrics_path in sorted(Path(args.candidate_report_dir).glob("*.json")):
-            report = json.loads(metrics_path.read_text(encoding="utf-8"))
-            values.append(
-                (
-                    str(report["candidate"]),
-                    metrics_path,
-                    Path(report["submission"]),
+        for directory in args.candidate_report_dir:
+            for metrics_path in sorted(Path(directory).glob("*.json")):
+                report = json.loads(metrics_path.read_text(encoding="utf-8"))
+                values.append(
+                    (
+                        str(report["candidate"]),
+                        metrics_path,
+                        Path(report["submission"]),
+                    )
                 )
-            )
     if not values:
         raise ValueError("at least one candidate report is required")
 
