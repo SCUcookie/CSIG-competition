@@ -72,6 +72,18 @@ def test_deeppro_component_points_are_xy_and_area_filtered():
     assert np.allclose(points[0], (7.5, 2.5))
 
 
+def test_deeppro_component_point_modes_use_probability_shape():
+    probability = np.zeros((5, 6), dtype=float)
+    probability[2, 2] = .6
+    probability[2, 3] = .9
+    binary = component_points(probability, .5, centroid_mode="binary")[0]
+    weighted = component_points(probability, .5, centroid_mode="weighted")[0]
+    peak = component_points(probability, .5, centroid_mode="peak")[0]
+    assert np.allclose(binary, (2.5, 2.0))
+    assert 2.5 < weighted[0] < 3.0 and weighted[1] == 2.0
+    assert peak == (3.0, 2.0)
+
+
 def test_tracking_ids_are_stable_without_dropping_initial_detections():
     frames = [[(2, 3)], [(3, 3)], [], [(5, 3)]]
     tracked = assign_track_ids(frames, (100, 100), max_age=3)

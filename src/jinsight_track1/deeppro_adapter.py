@@ -64,12 +64,20 @@ def temporal_windows(frame_count: int, length: int = 40, overlap: int = 4) -> li
     return result
 
 
-def component_points(probability: np.ndarray, threshold: float,
-                     min_area: int = 1, max_area: int | None = None) -> list[tuple[float, float]]:
-    """Return (x, y) centroids of 8-connected thresholded components."""
-    binary = np.asarray(probability) >= threshold
+def component_points(
+    probability: np.ndarray,
+    threshold: float,
+    min_area: int = 1,
+    max_area: int | None = None,
+    centroid_mode: str = "binary",
+) -> list[tuple[float, float]]:
+    """Return representative (x, y) points of thresholded components."""
+    if centroid_mode not in {"binary", "weighted", "peak"}:
+        raise ValueError("centroid_mode must be binary, weighted, or peak")
+    probability = np.asarray(probability)
+    binary = probability >= threshold
     if cv2 is not None:
-        count, _, stats, centres = cv2.connectedComponentsWithStats(
+        count, labels, stats, centres = cv2.connectedComponentsWithStats(
             binary.astype(np.uint8), connectivity=8, ltype=cv2.CV_32S
         )
         found = []
@@ -77,7 +85,22 @@ def component_points(probability: np.ndarray, threshold: float,
             area = int(stats[label, cv2.CC_STAT_AREA])
             if area < min_area or (max_area is not None and area > max_area):
                 continue
-            x, y = centres[label]
+            if centroid_mode == "binary":
+                x, y = centres[label]
+            else:
+                ys, xs = np.where(labels == label)
+                values = probability[ys, xs]
+                if centroid_mode == "peak":
+                    best = int(np.argmax(values))
+                    x, y = xs[best], ys[best]
+                else:
+                    weights = np.maximum(values, 0.0)
+                    total = float(weights.sum())
+                    if total <= 0:
+                        x, y = centres[label]
+                    else:
+                        x = float(np.dot(xs, weights) / total)
+                        y = float(np.dot(ys, weights) / total)
             if np.isfinite((x, y)).all():
                 found.append((float(x), float(y)))
         return found
@@ -88,10 +111,25 @@ def component_points(probability: np.ndarray, threshold: float,
     areas = np.asarray(ndimage.sum(binary, labels, ids))
     centres = ndimage.center_of_mass(binary, labels, ids)
     found = []
-    for area, centre in zip(areas, centres):
+    for label, area, centre in zip(ids, areas, centres):
         if area < min_area or (max_area is not None and area > max_area):
             continue
-        y, x = centre
+        if centroid_mode == "binary":
+            y, x = centre
+        else:
+            ys, xs = np.where(labels == label)
+            values = probability[ys, xs]
+            if centroid_mode == "peak":
+                best = int(np.argmax(values))
+                x, y = xs[best], ys[best]
+            else:
+                weights = np.maximum(values, 0.0)
+                total = float(weights.sum())
+                if total <= 0:
+                    y, x = centre
+                else:
+                    x = float(np.dot(xs, weights) / total)
+                    y = float(np.dot(ys, weights) / total)
         if np.isfinite((x, y)).all():
             found.append((float(x), float(y)))
     return found
@@ -275,6 +313,7 @@ def evaluate_deeppro(
     min_area: int = 1,
     max_area: int | None = None,
     adaptive_normalization: bool = False,
+    centroid_mode: str = "binary",
 ) -> dict:
     thresholds = sorted(set(thresholds or [1e-5, 1e-4, 1e-3, 1e-2, .1, .5]))
     if not thresholds or any(value <= 0 or value >= 1 for value in thresholds):
@@ -293,6 +332,10 @@ def evaluate_deeppro(
         sequences = sequences[:max_sequences]
     totals = {value: defaultdict(float) for value in thresholds}
     by_resolution = {value: {} for value in thresholds}
+    by_sequence = {
+        sequence.name: {value: defaultdict(float) for value in thresholds}
+        for sequence in sequences
+    }
     frame_count = 0
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -310,7 +353,11 @@ def evaluate_deeppro(
             resolution = f"{width}x{height}"
             for threshold in thresholds:
                 predicted = component_points(
-                    probabilities[index], threshold, min_area=min_area, max_area=max_area
+                    probabilities[index],
+                    threshold,
+                    min_area=min_area,
+                    max_area=max_area,
+                    centroid_mode=centroid_mode,
                 )
                 metrics = point_metrics(predicted, truth, radius)
                 bucket = by_resolution[threshold].setdefault(
@@ -319,6 +366,7 @@ def evaluate_deeppro(
                 for key in ("tp", "fp", "fn"):
                     totals[threshold][key] += metrics[key]
                     bucket[key] += metrics[key]
+                    by_sequence[sequence.name][threshold][key] += metrics[key]
             frame_count += 1
         partial_sweep = [_summary(totals[value], value) for value in thresholds]
         progress = {
@@ -362,6 +410,18 @@ def evaluate_deeppro(
         name: _summary(values, best["threshold"])
         for name, values in sorted(by_resolution[best["threshold"]].items())
     }
+    sequence_sweeps = {
+        name: [
+            _summary(values[threshold], threshold) for threshold in thresholds
+        ]
+        for name, values in sorted(by_sequence.items())
+    }
+    best_threshold_by_sequence = {
+        name: max(
+            rows, key=lambda row: (row["f1"], row["recall"], row["precision"])
+        )
+        for name, rows in sequence_sweeps.items()
+    }
     report = {
         "model": detector.model_name,
         "source_root": str(detector.source_root),
@@ -374,11 +434,14 @@ def evaluate_deeppro(
         "best_resolution_breakdown": best_resolution,
         "resolution_sweeps": resolution_sweeps,
         "best_threshold_by_resolution": best_threshold_by_resolution,
+        "sequence_sweeps": sequence_sweeps,
+        "best_threshold_by_sequence": best_threshold_by_sequence,
         "radius_pixels": radius,
         "tile_size": tile_size,
         "tile_halo": tile_halo,
         "component_min_area": min_area,
         "component_max_area": max_area,
+        "centroid_mode": centroid_mode,
         "adaptive_normalization": adaptive_normalization,
         "metric_status": "local point-matching proxy; not official scorer",
     }
@@ -406,6 +469,7 @@ def infer_deeppro(
     threshold_by_resolution: dict[str, float] | None = None,
     track: bool = False,
     adaptive_normalization: bool = False,
+    centroid_mode: str = "binary",
 ) -> dict:
     detector = DeepProDetector(
         source_root,
@@ -430,7 +494,10 @@ def infer_deeppro(
         height, width = frames.shape[1:] if len(frames) else (0, 0)
         resolution = f"{width}x{height}"
         sequence_threshold = (
-            threshold_by_resolution.get(resolution, threshold)
+            threshold_by_resolution.get(
+                sequence.name,
+                threshold_by_resolution.get(resolution, threshold),
+            )
             if threshold_by_resolution
             else threshold
         )
@@ -440,6 +507,7 @@ def infer_deeppro(
                 sequence_threshold,
                 min_area=min_area,
                 max_area=max_area,
+                centroid_mode=centroid_mode,
             )
             point_frames.append(points)
             detections += len(points)
@@ -475,6 +543,7 @@ def infer_deeppro(
         "detections": detections,
         "threshold": threshold,
         "threshold_by_resolution": threshold_by_resolution,
+        "centroid_mode": centroid_mode,
         "adaptive_normalization": adaptive_normalization,
         "tracking": track,
         "coordinate_order": coordinate_order,

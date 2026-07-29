@@ -87,6 +87,7 @@ def main() -> None:
     parser.add_argument("--top-k", default="1,2,3,5,8,10,15,20,30,50")
     parser.add_argument("--resolutions", help="comma-separated WxH values")
     parser.add_argument("--methods", help="comma-separated response methods")
+    parser.add_argument("--output")
     args = parser.parse_args()
     top_counts = [int(value) for value in args.top_k.split(",")]
     selected_resolutions = set(args.resolutions.split(",")) if args.resolutions else None
@@ -95,6 +96,7 @@ def main() -> None:
     if args.max_sequences:
         sequences = sequences[: args.max_sequences]
     totals = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
+    sequence_totals = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
     frames_seen = 0
     for sequence in sequences:
         stems, frames = _load_sequence_images(sequence, args.max_frames)
@@ -119,8 +121,12 @@ def main() -> None:
                 for count in top_counts:
                     metrics = point_metrics(largest[:count], truth, args.radius)
                     bucket = totals[(resolution, method, count)]
+                    sequence_bucket = sequence_totals[
+                        (sequence.name, resolution, method, count)
+                    ]
                     for key in bucket:
                         bucket[key] += metrics[key]
+                        sequence_bucket[key] += metrics[key]
             frames_seen += 1
         print(f"local-contrast {sequence.name} frames={frames_seen}", flush=True)
     rows = []
@@ -143,7 +149,37 @@ def main() -> None:
         best[resolution] = max(
             choices, key=lambda row: (row["f1"], row["recall"], row["precision"])
         )
-    print(json.dumps({"frames": frames_seen, "best_by_resolution": best}, indent=2))
+    sequence_rows = []
+    for (sequence, resolution, method, count), values in sequence_totals.items():
+        tp, fp, fn = (values[key] for key in ("tp", "fp", "fn"))
+        sequence_rows.append(
+            {
+                "sequence": sequence,
+                "resolution": resolution,
+                "method": method,
+                "top_k": count,
+                **values,
+                "precision": tp / max(1, tp + fp),
+                "recall": tp / max(1, tp + fn),
+                "f1": 2 * tp / max(1, 2 * tp + fp + fn),
+            }
+        )
+    best_by_sequence = {}
+    for sequence in sorted({row["sequence"] for row in sequence_rows}):
+        choices = [row for row in sequence_rows if row["sequence"] == sequence]
+        best_by_sequence[sequence] = max(
+            choices, key=lambda row: (row["f1"], row["recall"], row["precision"])
+        )
+    report = {
+        "frames": frames_seen,
+        "best_by_resolution": best,
+        "best_by_sequence": best_by_sequence,
+    }
+    if args.output:
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":

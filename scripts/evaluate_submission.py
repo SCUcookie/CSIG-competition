@@ -34,10 +34,12 @@ def main() -> None:
     parser.add_argument("submission")
     parser.add_argument("--radius", type=float, default=2.0)
     parser.add_argument("--coordinate-order", choices=["xy", "yx"], default="xy")
+    parser.add_argument("--output")
     args = parser.parse_args()
 
     totals: dict[str, int] = defaultdict(int)
     by_resolution: dict[str, dict[str, int]] = {}
+    by_sequence: dict[str, dict[str, int]] = {}
     sequences = _sequences(Path(args.val_root))
     submission = Path(args.submission)
     for sequence_index, sequence in enumerate(sequences, 1):
@@ -51,6 +53,7 @@ def main() -> None:
         expected_frames = set(range(1, len(stems) + 1))
         if set(prediction.frames) != expected_frames:
             raise ValueError(f"frame mismatch for sequence {sequence.name}")
+        sequence_totals: dict[str, int] = defaultdict(int)
         for frame_index, stem in enumerate(stems, 1):
             mask = np.asarray(Image.open(masks[stem]).convert("L"))
             height, width = mask.shape
@@ -69,6 +72,8 @@ def main() -> None:
             for key in ("tp", "fp", "fn"):
                 totals[key] += metrics[key]
                 bucket[key] += metrics[key]
+                sequence_totals[key] += metrics[key]
+        by_sequence[sequence.name] = sequence_totals
         print(
             f"submission-eval {sequence_index}/{len(sequences)} "
             f"sequence={sequence.name} frames={len(stems)}",
@@ -83,8 +88,16 @@ def main() -> None:
             resolution: summary(values)
             for resolution, values in sorted(by_resolution.items())
         },
+        "sequence_breakdown": {
+            sequence: summary(values)
+            for sequence, values in sorted(by_sequence.items())
+        },
         "metric_status": "local point-matching proxy; not official scorer",
     }
+    if args.output:
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
 
 
