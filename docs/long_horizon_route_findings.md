@@ -39,6 +39,39 @@ missing detections are mostly whole unseen tracks rather than short gaps.
   oracle accumulation was separable, but blind dense dynamic programming still
   produced zero hits on a representative wholly missed sequence because
   stronger background paths dominated.
+- The official TDCNet box head remained ineffective after CSIG adaptation. A
+  full-resolution heatmap replacement also failed: epoch 2 reached only about
+  `0.002` F1 on the fixed 256 probe, so neither output formulation justified
+  longer scratch training.
+- A MoPKL-derived detector initialized from the released visual backbone
+  reached F1 `0.2834` on the first 30 256 sequences after three epochs. This
+  confirms non-random learning but also confirms that the single-scale
+  stride-8 YOLOX head cannot approach the current point detector without the
+  unavailable task checkpoint.
+- FeedbackSTS-Det was adapted with a torchvision deformable-convolution
+  replacement. The original loss collapsed to background; a positive-crop,
+  dilated-mask, separately normalized focal variant reached only F1 `0.1230`
+  on the same 30-sequence probe after three epochs.
+- Loddis was inspected but not trained blindly. Its released forward pass
+  discards all but the last input frame and uses a single stride-8 YOLOX head;
+  its contribution is domain-adversarial object/background factorization.
+  That factorization addresses domain shift, but the released detector repeats
+  the spatial and temporal limitations already measured in MoPKL-lite.
+- Pretrained RAFT-small was used to warp neighboring frames at lags 2, 4 and
+  8. On the first 30 256 sequences, flow-compensated motion anomalies reached
+  standalone F1 `0.3889`. Of 2,196 points missed by the current baseline only
+  461 appeared among the top 20 anomaly peaks. Adding two peaks per frame
+  reduced F1 from `0.8023` to `0.7179`, so direct optical-flow complementation
+  was rejected.
+- HDNet was converted to a three-channel temporal-frequency model using the
+  current frame and forward/backward differences. Exact shape matching reused
+  2.84M of its 3.68M parameters from the trained MSHNet. After three bounded
+  epochs it reached only F1 `0.1366` on the first 30 256 sequences.
+- A DeepPro weak-track curriculum attenuated target contrast, reversed target
+  polarity and sometimes inverted the whole frame while retaining the strong
+  checkpoint initialization. Its two-epoch stage reached only about F1
+  `0.703` on the first 30 sequences versus the unchanged checkpoint route's
+  `0.802`, losing true positives instead of expanding recall.
 
 ## Domain evidence
 
@@ -49,9 +82,18 @@ features do not transfer across the sensor/background domain.
 
 ## Next viable route
 
-Do not spend more time on threshold sweeps, single-frame detectors, local patch
-classifiers, or label-free path search. The next route is end-to-end
-spatiotemporal representation learning. The official TDCNet implementation
-(AAAI 2026) is being adapted with phase-aligned history in one branch, raw
-history in the other, and expanded target boxes. Its full validation point F1,
-not its training loss or box mAP, is the merge criterion.
+Do not spend more time on threshold sweeps, direct flow residuals, single-frame
+detectors, local patch classifiers, short scratch training, or label-free path
+search. Every such family now has a measured recall or precision ceiling.
+
+The remaining high-upside route is task-specific pretrained spatiotemporal
+representation, followed by CSIG calibration rather than head replacement.
+The official MoPKL repository publishes strong DAUB-R and IRDST-H checkpoints,
+but the files are hosted as large Baidu Netdisk downloads that require an
+authenticated native-client session; the anonymous web API returns only the
+encrypted client payload. Once either checkpoint is placed locally, run
+zero-shot point-F1 and missed-track coverage first, then fine-tune only if the
+checkpoint demonstrates genuine complementarity. S²CPNet and decoupled motion
+representation learning are also conceptually aligned with the measured domain
+gap, but no official executable weights were found, so implementing them from
+paper descriptions is lower priority than acquiring the released MoPKL model.
