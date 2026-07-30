@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fit-penalty", type=float, default=0.5)
     parser.add_argument("--max-fit-rmse", type=float, default=4.0)
     parser.add_argument("--radius", type=float, default=2.0)
+    parser.add_argument(
+        "--separate-sequences",
+        action="store_true",
+        help="treat each sequence directory as an independent temporal stream",
+    )
     parser.add_argument("--output")
     return parser.parse_args()
 
@@ -216,7 +221,9 @@ def group_key(sequence: Path) -> str:
     return re.sub(r"_\d+$", "", sequence.name)
 
 
-def group_sequences(root: Path, resolutions: set[str] | None):
+def group_sequences(
+    root: Path, resolutions: set[str] | None, separate_sequences: bool = False
+):
     groups = defaultdict(list)
     for sequence in _sequences(root):
         images = _files(sequence / "img")
@@ -226,7 +233,8 @@ def group_sequences(root: Path, resolutions: set[str] | None):
         resolution = f"{first.width}x{first.height}"
         if resolutions and resolution not in resolutions:
             continue
-        groups[(group_key(sequence), resolution)].append(sequence)
+        name = sequence.name if separate_sequences else group_key(sequence)
+        groups[(name, resolution)].append(sequence)
     for key in groups:
         groups[key].sort(key=lambda path: path.name)
     return groups
@@ -479,7 +487,7 @@ def main() -> None:
     resolutions = set(args.resolutions.split(",")) if args.resolutions else None
     report_groups = []
     for (name, resolution), sequences in group_sequences(
-        Path(args.root), resolutions
+        Path(args.root), resolutions, args.separate_sequences
     ).items():
         rows = load_group(sequences)
         width, height = Image.open(rows[0]["image"]).size

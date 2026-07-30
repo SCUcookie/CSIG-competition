@@ -17,7 +17,7 @@ from jinsight_track1.tbd_patch import (
     TBDPatchClassifier,
     candidate_peaks,
     extract_patch_channels,
-    spatial_dark_score,
+    spatial_score,
 )
 
 
@@ -36,6 +36,8 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--device", default="cuda:1")
+    parser.add_argument("--score-mode", choices=("dark", "absolute"), default="dark")
+    parser.add_argument("--polarity-augment", action="store_true")
     parser.add_argument("--seed", type=int, default=20260730)
     return parser.parse_args()
 
@@ -62,7 +64,7 @@ def main():
                 [(point.x, point.y) for point in centroids(mask, 0.5, 1)],
                 dtype=float,
             ).reshape(-1, 2)
-            score = spatial_dark_score(frame)
+            score = spatial_score(frame, args.score_mode)
             candidates = candidate_peaks(score, args.negative_candidates)
             dark_truth = []
             for x, y in truth:
@@ -124,6 +126,13 @@ def main():
 
     positive = np.concatenate(positives)
     negative = np.concatenate(negatives)
+    if args.polarity_augment:
+        positive_flipped = positive.copy()
+        negative_flipped = negative.copy()
+        positive_flipped[:, 0] *= -1
+        negative_flipped[:, 0] *= -1
+        positive = np.concatenate((positive, positive_flipped))
+        negative = np.concatenate((negative, negative_flipped))
     print(f"patch-data positives={len(positive)} negatives={len(negative)}", flush=True)
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     torch.manual_seed(args.seed)

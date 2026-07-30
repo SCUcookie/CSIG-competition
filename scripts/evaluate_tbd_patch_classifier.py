@@ -17,7 +17,7 @@ from jinsight_track1.tbd_patch import (
     TBDPatchClassifier,
     candidate_peaks,
     extract_patch_channels,
-    spatial_dark_score,
+    spatial_score,
 )
 
 
@@ -33,6 +33,8 @@ def parse_args():
     parser.add_argument("--device", default="cuda:1")
     parser.add_argument("--radius", type=float, default=2.0)
     parser.add_argument("--output")
+    parser.add_argument("--dense", action="store_true")
+    parser.add_argument("--max-frames", type=int)
     return parser.parse_args()
 
 
@@ -60,6 +62,7 @@ def main():
     model = TBDPatchClassifier().to(device)
     model.load_state_dict(checkpoint["model"])
     model.eval()
+    score_mode = checkpoint.get("settings", {}).get("score_mode", "dark")
     resolutions = set(args.resolutions.split(",")) if args.resolutions else None
     selected_sequences = set(args.sequences.split(",")) if args.sequences else None
     roi = tuple(map(int, args.roi.split(","))) if args.roi else None
@@ -86,12 +89,19 @@ def main():
             if resolutions and resolution not in resolutions:
                 continue
             frame_records = []
+            if args.max_frames:
+                stems = stems[: args.max_frames]
             for stem in stems:
                 frame = np.asarray(Image.open(images[stem]).convert("L"), dtype=np.uint8)
                 mask = np.asarray(Image.open(masks[stem]).convert("L"))
                 truth = [(point.x, point.y) for point in centroids(mask, 0.5, 1)]
-                score = spatial_dark_score(frame)
-                points = candidate_peaks(score, args.candidates, roi=roi)
+                score = spatial_score(frame, score_mode)
+                if args.dense:
+                    x0, y0, x1, y1 = roi or (0, 0, width, height)
+                    xs, ys = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
+                    points = np.column_stack((xs.ravel(), ys.ravel()))
+                else:
+                    points = candidate_peaks(score, args.candidates, roi=roi)
                 features = extract_patch_channels(frame, score, points, patch_size)
                 frame_logits = []
                 for start in range(0, len(features), args.batch_size):

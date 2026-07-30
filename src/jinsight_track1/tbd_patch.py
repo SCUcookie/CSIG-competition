@@ -43,6 +43,16 @@ def spatial_dark_score(frame: np.ndarray) -> np.ndarray:
     return (raw - median) / max(0.25, 1.4826 * mad)
 
 
+def spatial_score(frame: np.ndarray, mode: str = "dark") -> np.ndarray:
+    """Return a robust small-target response, optionally polarity invariant."""
+    score = spatial_dark_score(frame)
+    if mode == "dark":
+        return score
+    if mode == "absolute":
+        return np.abs(score)
+    raise ValueError(f"unsupported spatial score mode: {mode}")
+
+
 def candidate_peaks(
     score: np.ndarray,
     count: int,
@@ -75,23 +85,31 @@ def extract_patch_channels(
     size: int = 21,
 ) -> np.ndarray:
     radius = size // 2
+    value = frame.astype(np.float32)
+    mean = cv2.boxFilter(value, cv2.CV_32F, (size, size), normalize=True)
+    mean2 = cv2.boxFilter(value * value, cv2.CV_32F, (size, size), normalize=True)
+    deviation = np.sqrt(np.maximum(mean2 - mean * mean, 1.0))
+    normalized_map = np.clip((value - mean) / deviation, -8, 8)
     padded_frame = cv2.copyMakeBorder(
-        frame, radius, radius, radius, radius, cv2.BORDER_REFLECT
+        normalized_map, radius, radius, radius, radius, cv2.BORDER_REFLECT
     )
     padded_score = cv2.copyMakeBorder(
         score, radius, radius, radius, radius, cv2.BORDER_REFLECT
     )
-    patches = []
-    for x, y in np.asarray(points, dtype=int).reshape(-1, 2):
-        raw = padded_frame[y : y + size, x : x + size].astype(np.float32)
-        local_score = padded_score[y : y + size, x : x + size].astype(np.float32)
-        border = np.concatenate((raw[0], raw[-1], raw[1:-1, 0], raw[1:-1, -1]))
-        centre = float(np.median(border))
-        mad = float(np.median(np.abs(border - centre)))
-        normalized = np.clip((raw - centre) / max(1.0, 1.4826 * mad), -8, 8)
-        patches.append(
-            np.stack((normalized / 4.0, np.clip(local_score, -8, 8) / 4.0))
-        )
-    if not patches:
+    points = np.asarray(points, dtype=int).reshape(-1, 2)
+    if not len(points):
         return np.zeros((0, 2, size, size), dtype=np.float32)
-    return np.asarray(patches, dtype=np.float32)
+    frame_windows = np.lib.stride_tricks.sliding_window_view(
+        padded_frame, (size, size)
+    )
+    score_windows = np.lib.stride_tricks.sliding_window_view(
+        padded_score, (size, size)
+    )
+    xs, ys = points[:, 0], points[:, 1]
+    return np.stack(
+        (
+            frame_windows[ys, xs] / 4.0,
+            np.clip(score_windows[ys, xs], -8, 8) / 4.0,
+        ),
+        axis=1,
+    ).astype(np.float32, copy=False)

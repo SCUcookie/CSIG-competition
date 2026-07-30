@@ -9,6 +9,7 @@ from jinsight_track1.evaluation import point_metrics
 from jinsight_track1.yolo_seg import _prediction_points
 from jinsight_track1.deeppro_adapter import component_points, temporal_windows
 from jinsight_track1.tracking import assign_track_ids
+from jinsight_track1.tbd_patch import extract_patch_channels, spatial_score
 def test_centroid_xy_and_eight_connectivity():
     a=np.zeros((10,12)); a[2:4,7:9]=1; a[4,9]=1
     d=centroids(a,min_area=2)[0]; assert abs(d.x-7.8)<.3 and abs(d.y-3.0)<.3
@@ -89,3 +90,18 @@ def test_tracking_ids_are_stable_without_dropping_initial_detections():
     tracked = assign_track_ids(frames, (100, 100), max_age=3)
     assert tracked[1][0].track_id == tracked[2][0].track_id == tracked[4][0].track_id
     assert len(tracked[1]) == 1 and tracked[3] == []
+
+
+def test_polarity_invariant_patch_response_and_vectorized_features():
+    image = np.full((25, 27), 100, dtype=np.uint8)
+    image[12, 13] = 70
+    dark = spatial_score(image, "dark")
+    absolute = spatial_score(image, "absolute")
+    assert absolute.shape == image.shape
+    assert np.all(absolute >= 0)
+    assert np.allclose(absolute, np.abs(dark))
+    patches = extract_patch_channels(
+        image, absolute, np.asarray([[13, 12], [0, 0]]), size=9
+    )
+    assert patches.shape == (2, 2, 9, 9)
+    assert np.isfinite(patches).all()
