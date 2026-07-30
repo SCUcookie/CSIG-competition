@@ -32,7 +32,11 @@ def image_files(directory: Path) -> list[Path]:
                   key=natural_key)
 
 
-def sequence_samples(root: Path, resolution: tuple[int, int]):
+def sequence_samples(
+    root: Path,
+    resolution: tuple[int, int],
+    max_sequences: int | None = None,
+):
     samples = []
     sequences = []
     for sequence in sorted(
@@ -46,6 +50,8 @@ def sequence_samples(root: Path, resolution: tuple[int, int]):
         sequences.append(sequence.name)
         for index, frame in enumerate(frames):
             samples.append((frames, index, masks.get(frame.stem)))
+        if max_sequences and len(sequences) >= max_sequences:
+            break
     return samples, sequences
 
 
@@ -99,12 +105,15 @@ class CSIGTDCSequenceDataset(Dataset):
         context: int = 5,
         box_size: float = 12.0,
         augment: bool = False,
+        max_sequences: int | None = None,
     ):
         self.width, self.height = resolution
         self.context = int(context)
         self.box_size = float(box_size)
         self.augment = augment
-        self.samples, self.sequences = sequence_samples(Path(root), resolution)
+        self.samples, self.sequences = sequence_samples(
+            Path(root), resolution, max_sequences
+        )
         if not self.samples:
             raise RuntimeError(f"no {self.width}x{self.height} samples in {root}")
 
