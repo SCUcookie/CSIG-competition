@@ -27,6 +27,18 @@ missing detections are mostly whole unseen tracks rather than short gaps.
   shift-and-stack peaked at F1 0.039.
 - A direct nine-frame temporal patch classifier fit its training hard
   negatives but produced zero top-100 hits on a held-out contiguous shard.
+- Whole-frame YOLO domain adaptation on validation shards 02-04 produced
+  held-out shard-01 point F1 0.0815 (55 TP, 556 FP, 683 FN), improving the
+  prior zero result but not enough to merge.
+- The corrected scratch P2 detector used 12-pixel centroid boxes and learned
+  nonzero box/DFL losses, but held-out point F1 was only 0.0004 (11 TP and
+  51,018 FP at the best threshold). The earlier zero-size-label failure was
+  fixed, so this is a valid rejection of the single-frame detection route.
+- On the first 30 256x256 validation sequences, missed target points had a
+  median per-frame fused-response local-maximum rank of about 544. Long-track
+  oracle accumulation was separable, but blind dense dynamic programming still
+  produced zero hits on a representative wholly missed sequence because
+  stronger background paths dominated.
 
 ## Domain evidence
 
@@ -37,10 +49,9 @@ features do not transfer across the sensor/background domain.
 
 ## Next viable route
 
-Do not spend more time on threshold sweeps, local patch classifiers, or blind
-track filling. The next experiment must adapt an image-level detector using
-whole-frame context and labelled validation-domain frames, with shard-level
-holdout to measure transfer before training on every labelled frame. A
-polarity-symmetric full-frame segmentation detector is the smallest viable
-test; it should be rejected unless a held-out shard produces a material point
-F1 gain.
+Do not spend more time on threshold sweeps, single-frame detectors, local patch
+classifiers, or label-free path search. The next route is end-to-end
+spatiotemporal representation learning. The official TDCNet implementation
+(AAAI 2026) is being adapted with phase-aligned history in one branch, raw
+history in the other, and expanded target boxes. Its full validation point F1,
+not its training loss or box mAP, is the merge criterion.

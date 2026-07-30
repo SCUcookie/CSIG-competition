@@ -67,6 +67,77 @@ def point_box_labels(mask: np.ndarray, box_size: float = 12.0) -> list[str]:
     return labels
 
 
+def prepare_raw_point_box_dataset(
+    train_root: str | Path,
+    val_root: str | Path,
+    output_root: str | Path,
+    box_size: float = 12.0,
+) -> dict:
+    """Symlink raw frames and write fixed-size centroid detection boxes.
+
+    YOLO segmentation polygons around one-pixel targets are not valid
+    supervision for a detection head: their converted widths and heights are
+    effectively zero. This representation deliberately expands every target
+    component while leaving the raw image pixels unchanged.
+    """
+    output = Path(output_root)
+    stats = {
+        "train_root": str(train_root),
+        "val_root": str(val_root),
+        "output_root": str(output),
+        "box_size": float(box_size),
+        "splits": {},
+    }
+    for split, root_value in (("train", train_root), ("val", val_root)):
+        image_out = output / "images" / split
+        label_out = output / "labels" / split
+        image_out.mkdir(parents=True, exist_ok=True)
+        label_out.mkdir(parents=True, exist_ok=True)
+        split_stats = {
+            "sequences": 0,
+            "frames": 0,
+            "objects": 0,
+            "empty": 0,
+            "missing_masks": 0,
+        }
+        for sequence in sequence_dirs(root_value):
+            frames = image_files(sequence / "img")
+            masks = {p.stem: p for p in image_files(sequence / "mask")}
+            for frame_path in frames:
+                name = f"{sequence.name}__{frame_path.stem}"
+                target_image = image_out / f"{name}{frame_path.suffix.lower()}"
+                if not target_image.exists():
+                    target_image.symlink_to(frame_path.resolve())
+                mask_path = masks.get(frame_path.stem)
+                if mask_path is None:
+                    mask = np.zeros(cv2.imread(str(frame_path), cv2.IMREAD_GRAYSCALE).shape,
+                                    dtype=np.uint8)
+                    split_stats["missing_masks"] += 1
+                else:
+                    mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+                    if mask is None:
+                        raise RuntimeError(f"could not read {mask_path}")
+                labels = point_box_labels(mask, box_size)
+                (label_out / f"{name}.txt").write_text(
+                    "\n".join(labels) + ("\n" if labels else ""), encoding="ascii"
+                )
+                split_stats["frames"] += 1
+                split_stats["objects"] += len(labels)
+                split_stats["empty"] += int(not labels)
+            split_stats["sequences"] += 1
+        stats["splits"][split] = split_stats
+    yaml_path = output / "dataset.yaml"
+    yaml_path.write_text(
+        f"path: {output.resolve()}\n"
+        "train: images/train\nval: images/val\nnc: 1\nnames: [target]\n",
+        encoding="utf-8",
+    )
+    (output / "conversion_stats.json").write_text(
+        json.dumps(stats, indent=2), encoding="utf-8"
+    )
+    return stats
+
+
 def prepare_frame_dynamics_dataset(
     train_root: str | Path,
     val_root: str | Path,

@@ -186,29 +186,37 @@ def _polygon_centroid(points: np.ndarray, fallback: tuple[float, float]) -> tupl
 
 
 def _prediction_points(result, min_conf: float) -> list[tuple[float, float, float]]:
-    if result.masks is None or result.boxes is None:
+    if result.boxes is None:
         return []
-    # Do not calculate centroids directly on result.masks.data: that tensor can
-    # use the imgsz/letterboxed inference canvas rather than the original image
-    # shape. Masks.xy and Boxes.xywh are explicitly mapped to original pixels.
-    polygons = result.masks.xy
     confs = _as_numpy(result.boxes.conf).reshape(-1)
     centres = _as_numpy(result.boxes.xywh).reshape(-1, 4)[:, :2]
-    if len(polygons) != len(confs) or len(centres) != len(confs):
-        raise RuntimeError("Ultralytics returned inconsistent masks, boxes, and confidences")
+    if len(centres) != len(confs):
+        raise RuntimeError("Ultralytics returned inconsistent boxes and confidences")
+    # Detection models have no masks, so their original-image box centres are
+    # the desired point predictions. Segmentation models retain polygon-area
+    # centroids, with the box centre as a fallback for degenerate tiny masks.
+    polygons = result.masks.xy if result.masks is not None else [None] * len(confs)
+    if len(polygons) != len(confs):
+        raise RuntimeError("Ultralytics returned inconsistent masks and boxes")
     h, w = (int(v) for v in result.orig_shape)
     found = []
     for polygon, centre, score in zip(polygons, centres, confs):
         score = float(score)
         if score < min_conf:
             continue
-        x, y = _polygon_centroid(polygon, (float(centre[0]), float(centre[1])))
+        fallback = (float(centre[0]), float(centre[1]))
+        x, y = fallback if polygon is None else _polygon_centroid(polygon, fallback)
         if not np.isfinite((x, y)).all():
             raise RuntimeError("prediction contains a non-finite centroid")
         if not (0.0 <= x < w and 0.0 <= y < h):
-            raise RuntimeError(
-                f"original-image centroid ({x:.3f}, {y:.3f}) is outside {w}x{h}"
-            )
+            # Some Ultralytics versions can return an incorrectly inverse-scaled
+            # Masks.xy polygon for very low-confidence, border-touching masks.
+            # Boxes.xywh is independently mapped to original-image coordinates.
+            x, y = float(centre[0]), float(centre[1])
+            if not (0.0 <= x < w and 0.0 <= y < h):
+                raise RuntimeError(
+                    f"original-image centroid ({x:.3f}, {y:.3f}) is outside {w}x{h}"
+                )
         found.append((x, y, score))
     return found
 

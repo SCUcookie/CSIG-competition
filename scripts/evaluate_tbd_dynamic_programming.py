@@ -27,6 +27,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("root")
     parser.add_argument("--resolutions", default="640x512")
+    parser.add_argument(
+        "--sequences",
+        help="comma-separated sequence names; useful for bounded diagnostics",
+    )
     parser.add_argument("--block-size", type=int, default=16)
     parser.add_argument("--transition-radius", type=int, default=1)
     parser.add_argument("--motion-penalty", type=float, default=0.02)
@@ -222,10 +226,15 @@ def group_key(sequence: Path) -> str:
 
 
 def group_sequences(
-    root: Path, resolutions: set[str] | None, separate_sequences: bool = False
+    root: Path,
+    resolutions: set[str] | None,
+    separate_sequences: bool = False,
+    selected_sequences: set[str] | None = None,
 ):
     groups = defaultdict(list)
     for sequence in _sequences(root):
+        if selected_sequences and sequence.name not in selected_sequences:
+            continue
         images = _files(sequence / "img")
         if not images:
             continue
@@ -485,9 +494,10 @@ def oracle_diagnostics(
 def main() -> None:
     args = parse_args()
     resolutions = set(args.resolutions.split(",")) if args.resolutions else None
+    selected_sequences = set(args.sequences.split(",")) if args.sequences else None
     report_groups = []
     for (name, resolution), sequences in group_sequences(
-        Path(args.root), resolutions, args.separate_sequences
+        Path(args.root), resolutions, args.separate_sequences, selected_sequences
     ).items():
         rows = load_group(sequences)
         width, height = Image.open(rows[0]["image"]).size

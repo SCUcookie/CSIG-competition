@@ -57,6 +57,28 @@ def test_yolo_centroid_falls_back_to_original_box_and_filters_confidence():
     assert np.allclose(point[:2], (90.0, 40.0))
 
 
+def test_yolo_centroid_falls_back_when_polygon_mapping_is_outside_image():
+    result = _fake_seg_result(
+        (512, 640),
+        (320.0, 250.0),
+        [(975.0, 500.0), (985.0, 500.0), (985.0, 508.0), (975.0, 508.0)],
+    )
+    assert np.allclose(_prediction_points(result, .25)[0][:2], (320.0, 250.0))
+
+
+def test_yolo_detection_model_uses_original_box_centres():
+    result = SimpleNamespace(
+        orig_shape=(512, 640),
+        masks=None,
+        boxes=SimpleNamespace(
+            conf=np.asarray([.9, .1]),
+            xywh=np.asarray([[320.0, 250.0, 12.0, 12.0],
+                             [100.0, 100.0, 12.0, 12.0]]),
+        ),
+    )
+    assert _prediction_points(result, .25) == [(320.0, 250.0, .9)]
+
+
 def test_deeppro_temporal_windows_cover_and_end_align():
     windows = temporal_windows(100, 40, 4)
     assert windows == [(0, 40), (36, 76), (60, 100)]
