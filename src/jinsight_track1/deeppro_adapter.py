@@ -222,8 +222,8 @@ class DeepProDetector:
                 ix0, ix1 = max(0, x0 - self.tile_halo), min(width, x1 + self.tile_halo)
                 yield (y0, y1, x0, x1), (iy0, iy1, ix0, ix1)
 
-    def predict(self, frames: np.ndarray) -> np.ndarray:
-        """Predict a full sequence as float32 probabilities in original pixels."""
+    def _predict_forward(self, frames: np.ndarray) -> np.ndarray:
+        """Run the original forward-only model on already prepared frames."""
         values = np.asarray(frames)
         if values.ndim != 3:
             raise ValueError("frames must have shape [time, height, width]")
@@ -271,6 +271,115 @@ class DeepProDetector:
         if count and np.any(coverage == 0):
             raise RuntimeError("DeepPro temporal windows did not cover every frame")
         return merged
+
+    @staticmethod
+    def phase_correlation_align(
+        frames: np.ndarray, max_side: int = 512
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Register every frame to frame zero with phase correlation.
+
+        Returns aligned frames, forward translations from the reference frame
+        to each original frame, and phase-correlation response strengths.
+        """
+        if cv2 is None:
+            raise DeepProUnavailable(
+                "OpenCV is required for phase-correlation compensation"
+            )
+        values = np.asarray(frames)
+        if values.ndim != 3 or not len(values):
+            return values.copy(), np.zeros((len(values), 2)), np.zeros(len(values))
+        height, width = values.shape[1:]
+        scale = min(1.0, max_side / max(height, width))
+        size = (max(32, round(width * scale)), max(32, round(height * scale)))
+        window = cv2.createHanningWindow(size, cv2.CV_32F)
+
+        def prepare(frame):
+            small = cv2.resize(
+                frame.astype(np.float32), size, interpolation=cv2.INTER_AREA
+            )
+            return cv2.GaussianBlur(small, (0, 0), 1.0)
+
+        reference = prepare(values[0])
+        translations = np.zeros((len(values), 2), dtype=np.float32)
+        responses = np.ones(len(values), dtype=np.float32)
+        aligned = np.empty_like(values)
+        aligned[0] = values[0]
+        for index in range(1, len(values)):
+            current = prepare(values[index])
+            shift, response = cv2.phaseCorrelate(reference, current, window)
+            if np.isfinite(shift).all() and response > 0.01:
+                translations[index] = np.asarray(shift, dtype=np.float32) / scale
+                responses[index] = response
+            else:
+                translations[index] = translations[index - 1]
+                responses[index] = response if np.isfinite(response) else 0.0
+            dx, dy = translations[index]
+            aligned[index] = cv2.warpAffine(
+                values[index],
+                np.asarray([[1, 0, -dx], [0, 1, -dy]], dtype=np.float32),
+                (width, height),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_REFLECT,
+            )
+        return aligned, translations, responses
+
+    @staticmethod
+    def undo_phase_correlation(
+        probabilities: np.ndarray, translations: np.ndarray
+    ) -> np.ndarray:
+        if cv2 is None:
+            raise DeepProUnavailable(
+                "OpenCV is required for phase-correlation compensation"
+            )
+        restored = np.empty_like(probabilities)
+        height, width = probabilities.shape[1:]
+        for index, (probability, (dx, dy)) in enumerate(
+            zip(probabilities, translations)
+        ):
+            restored[index] = cv2.warpAffine(
+                probability,
+                np.asarray([[1, 0, dx], [0, 1, dy]], dtype=np.float32),
+                (width, height),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=0,
+            )
+        return restored
+
+    def predict(
+        self,
+        frames: np.ndarray,
+        *,
+        bidirectional: bool = False,
+        fusion: str = "max",
+        motion_compensation: bool = False,
+        phase_max_side: int = 512,
+    ) -> np.ndarray:
+        """Predict probabilities with optional first-place challenge refinements."""
+        if fusion not in {"max", "mean", "geometric"}:
+            raise ValueError("fusion must be max, mean, or geometric")
+        values = np.asarray(frames)
+        translations = None
+        if motion_compensation:
+            values, translations, _ = self.phase_correlation_align(
+                values, max_side=phase_max_side
+            )
+        forward = self._predict_forward(values)
+        if bidirectional:
+            backward = self._predict_forward(values[::-1])[::-1].copy()
+            if fusion == "max":
+                probabilities = np.maximum(forward, backward)
+            elif fusion == "mean":
+                probabilities = (forward + backward) * 0.5
+            else:
+                probabilities = np.sqrt(np.maximum(forward * backward, 0))
+        else:
+            probabilities = forward
+        if translations is not None:
+            probabilities = self.undo_phase_correlation(
+                probabilities, translations
+            )
+        return probabilities
 
 
 def _load_sequence_images(sequence: Path, max_frames: int | None = None):
