@@ -47,6 +47,9 @@ METHODS = [
     "global_median_abs",
     "global_median_positive",
     "global_median_negative",
+    "registered_median_abs",
+    "registered_median_positive",
+    "registered_median_negative",
     *[
         f"lag{lag}_{polarity}"
         for lag in (20, 50, 100)
@@ -55,11 +58,37 @@ METHODS = [
 ]
 
 
+def translation_trajectory(frames: np.ndarray, max_side: int = 384) -> np.ndarray:
+    """Estimate cumulative camera translation with phase correlation."""
+    height, width = frames.shape[1:]
+    scale = min(1.0, max_side / max(height, width))
+    size = (max(32, round(width * scale)), max(32, round(height * scale)))
+    positions = np.zeros((len(frames), 2), dtype=np.float32)
+    window = cv2.createHanningWindow(size, cv2.CV_32F)
+    previous = None
+    for index, frame in enumerate(frames):
+        small = cv2.resize(
+            frame.astype(np.float32), size, interpolation=cv2.INTER_AREA
+        )
+        small = cv2.GaussianBlur(small, (0, 0), 1.2)
+        if previous is not None:
+            shift, response = cv2.phaseCorrelate(previous, small, window)
+            if response > .02 and np.isfinite(shift).all():
+                positions[index] = positions[index - 1] + np.asarray(shift) / scale
+            else:
+                positions[index] = positions[index - 1]
+        previous = small
+    return positions
+
+
 def temporal_score_frames(frames: np.ndarray, method: str, radius: int):
     """Yield one score map at a time to keep long videos below 1 GB RAM."""
     if method.startswith("global_median_"):
         stride = max(1, len(frames) // 80)
         background = np.median(frames[::stride], axis=0).astype(np.float32)
+    if method.startswith("registered_median_"):
+        positions = translation_trajectory(frames)
+        height, width = frames.shape[1:]
     for index, frame in enumerate(frames):
         current = frame.astype(np.float32)
         if method.startswith("adjacent_"):
@@ -69,6 +98,28 @@ def temporal_score_frames(frames: np.ndarray, method: str, radius: int):
             reference = np.median(frames[start:end], axis=0).astype(np.float32)
         elif method.startswith("global_median_"):
             reference = background
+        elif method.startswith("registered_median_"):
+            start, end = max(0, index - radius), min(len(frames), index + radius + 1)
+            aligned = []
+            for neighbor in range(start, end):
+                if neighbor == index:
+                    continue
+                dx, dy = positions[index] - positions[neighbor]
+                transform = np.asarray([[1, 0, dx], [0, 1, dy]], dtype=np.float32)
+                aligned.append(
+                    cv2.warpAffine(
+                        frames[neighbor],
+                        transform,
+                        (width, height),
+                        flags=cv2.INTER_LINEAR,
+                        borderMode=cv2.BORDER_REFLECT,
+                    )
+                )
+            reference = (
+                np.median(np.stack(aligned), axis=0).astype(np.float32)
+                if aligned
+                else current
+            )
         elif method.startswith("lag"):
             lag = int(method.split("_", 1)[0][3:])
             reference = frames[max(0, index - lag)].astype(np.float32)

@@ -34,6 +34,7 @@ def main() -> None:
     parser.add_argument("submission")
     parser.add_argument("--radius", type=float, default=2.0)
     parser.add_argument("--coordinate-order", choices=["xy", "yx"], default="xy")
+    parser.add_argument("--resolutions", help="optional comma-separated WxH filter")
     parser.add_argument("--output")
     args = parser.parse_args()
 
@@ -41,14 +42,23 @@ def main() -> None:
     by_resolution: dict[str, dict[str, int]] = {}
     by_sequence: dict[str, dict[str, int]] = {}
     sequences = _sequences(Path(args.val_root))
+    selected_resolutions = (
+        set(args.resolutions.split(",")) if args.resolutions else None
+    )
     submission = Path(args.submission)
+    evaluated_sequences = 0
     for sequence_index, sequence in enumerate(sequences, 1):
+        masks = _files(sequence / "mask")
+        first_mask = next(iter(masks.values()))
+        first_shape = np.asarray(Image.open(first_mask)).shape
+        resolution = f"{first_shape[1]}x{first_shape[0]}"
+        if selected_resolutions and resolution not in selected_resolutions:
+            continue
         prediction = parse(
             (submission / f"{sequence.name}.txt").read_text(encoding="ascii"),
             sequence.name,
             args.coordinate_order,
         )
-        masks = _files(sequence / "mask")
         stems = sorted(masks, key=lambda value: natural_key(Path(value)))
         expected_frames = set(range(1, len(stems) + 1))
         if set(prediction.frames) != expected_frames:
@@ -74,6 +84,7 @@ def main() -> None:
                 bucket[key] += metrics[key]
                 sequence_totals[key] += metrics[key]
         by_sequence[sequence.name] = sequence_totals
+        evaluated_sequences += 1
         print(
             f"submission-eval {sequence_index}/{len(sequences)} "
             f"sequence={sequence.name} frames={len(stems)}",
@@ -81,7 +92,7 @@ def main() -> None:
         )
 
     report = {
-        "sequences": len(sequences),
+        "sequences": evaluated_sequences,
         "radius_pixels": args.radius,
         **summary(totals),
         "resolution_breakdown": {
